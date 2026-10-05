@@ -12,3 +12,4 @@ htmlcov/
 data/
 *.dcm
 !tests/fixtures/**/*.dcm
+!examples/*.dcm
