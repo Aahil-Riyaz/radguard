@@ -1,4 +1,4 @@
-"""Command-line entry point: `radguard scan <paths...>`."""
+"""Command-line entry point: `radguard scan <paths...>` and `radguard map <file>`."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ import json
 import sys
 from collections import Counter
 
-from radguard import __version__
+from radguard import __version__, mapview
 from radguard.findings import Severity
-from radguard.scanner import scan_paths
+from radguard.scanner import open_dicom, scan_paths
 
 SEVERITY_NAMES = [str(s) for s in Severity]
 
@@ -30,28 +30,34 @@ def main(argv: list[str] | None = None) -> int:
         help="exit with status 1 if any finding is at least this severe (default: high)",
     )
 
+    mp = sub.add_parser("map", help="show the byte-level structure of one DICOM file")
+    mp.add_argument("path")
+    mp.add_argument("--depth", type=int, help="hide elements nested deeper than this many sequences")
+    mp.add_argument("--show-phi", action="store_true", help="show patient-identifying values instead of masking them")
+
     args = parser.parse_args(argv)
-    return _scan(args)
+    return _map(args) if args.command == "map" else _scan(args)
 
 
 def _scan(args: argparse.Namespace) -> int:
     threshold = Severity.parse(args.fail_on)
     findings, errors = [], []
-    files = dicom = 0
+    files = dicom = skipped = 0
 
     for result in scan_paths(args.paths):
         files += 1
         dicom += result.is_dicom
+        skipped += not result.is_dicom and not result.error
         findings.extend(result.findings)
         if result.error:
             errors.append({"path": result.path, "error": result.error})
 
-    findings.sort(key=lambda f: (-f.severity, f.path))
+    findings.sort(key=lambda f: (-f.severity, f.path, f.offset or 0))
     by_severity = Counter(str(f.severity) for f in findings)
     summary = {
         "files": files,
         "dicom": dicom,
-        "skipped": files - dicom - len(errors),
+        "skipped": skipped,
         "errors": len(errors),
         "findings": {name: by_severity.get(name, 0) for name in reversed(SEVERITY_NAMES)},
     }
@@ -64,15 +70,30 @@ def _scan(args: argparse.Namespace) -> int:
         sys.stdout.write("\n")
     else:
         for f in findings:
-            print(f"{str(f.severity).upper():<9} {f.check:<26} {f.path}")
+            print(f"{str(f.severity).upper():<9} {f.check:<34} {f.path}")
             print(f"{'':<9} {f.title}")
             print(f"{'':<9} {f.detail}")
         for e in errors:
             print(f"{'ERROR':<9} {e['path']}: {e['error']}", file=sys.stderr)
         counts = ", ".join(f"{n}={c}" for n, c in summary["findings"].items() if c)
         print(
-            f"\nscanned {files} files: {dicom} DICOM, {summary['skipped']} skipped, "
+            f"\nscanned {files} files: {dicom} DICOM, {skipped} skipped, "
             f"{len(errors)} errors; findings: {counts or 'none'}"
         )
 
     return 1 if any(f.severity >= threshold for f in findings) else 0
+
+
+def _map(args: argparse.Namespace) -> int:
+    try:
+        with open_dicom(args.path) as ctx:
+            if ctx is None:
+                print(f"{args.path}: not a DICOM Part 10 file", file=sys.stderr)
+                return 2
+            for line in mapview.render(args.path, ctx.buf, ctx.parsed,
+                                       max_depth=args.depth, show_phi=args.show_phi):
+                print(line)
+    except OSError as exc:
+        print(f"{args.path}: {exc}", file=sys.stderr)
+        return 2
+    return 0
