@@ -19,7 +19,13 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "hypothesis>=6.100",
+    # Reference implementation for differential tests (what real software sees)
+    "pydicom>=3.0",
+    "numpy>=1.26",
+]
 
 [project.scripts]
 radguard = "radguard.cli:main"
