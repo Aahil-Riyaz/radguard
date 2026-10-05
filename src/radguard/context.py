@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import BinaryIO
+from functools import cached_property
+
+from radguard.dicom import ParsedFile, parse
 
 PREAMBLE_LEN = 128
 MAGIC = b"DICM"
@@ -13,6 +15,14 @@ HEADER_LEN = PREAMBLE_LEN + len(MAGIC)
 @dataclass
 class FileContext:
     path: str
-    fh: BinaryIO  # opened in binary mode; checks may seek freely
+    buf: bytes  # or a read-only mmap: anything supporting len, slicing, find and struct
     size: int
-    preamble: bytes  # always exactly PREAMBLE_LEN bytes
+
+    @property
+    def preamble(self) -> bytes:
+        return bytes(self.buf[:PREAMBLE_LEN])
+
+    @cached_property
+    def parsed(self) -> ParsedFile:
+        # Parsed once, shared by every check that needs structure.
+        return parse(self.buf)

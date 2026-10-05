@@ -10,7 +10,7 @@ from radguard.scanner import scan_file
 def checks_for(path):
     result = scan_file(path)
     assert result.is_dicom
-    return [(f.check, f.severity) for f in result.findings]
+    return [(f.check, f.severity) for f in result.findings if f.check.startswith("preamble.")]
 
 
 def test_zero_preamble_is_clean(write_file):

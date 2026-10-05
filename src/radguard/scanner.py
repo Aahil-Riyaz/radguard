@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import mmap
 import os
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from radguard.checks import ALL_CHECKS, Check
@@ -32,22 +34,36 @@ def iter_files(paths: Iterable[str]) -> Iterator[str]:
             yield path
 
 
+@contextmanager
+def open_dicom(path: str) -> Iterator[FileContext | None]:
+    """Memory-map `path` read-only; yield a FileContext, or None if it is not a Part 10 file.
+
+    Mapping instead of reading means multi-gigabyte studies cost no RAM and
+    checks can jump to any offset without copying.
+    """
+    with open(path, "rb") as fh:
+        size = os.fstat(fh.fileno()).st_size
+        if size < HEADER_LEN:
+            yield None
+            return
+        with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as buf:
+            yield FileContext(path, buf, size) if buf[PREAMBLE_LEN:HEADER_LEN] == MAGIC else None
+
+
 def scan_file(path: str, checks: Iterable[Check] = ALL_CHECKS) -> FileResult:
     try:
-        with open(path, "rb") as fh:
-            header = fh.read(HEADER_LEN)
-            if len(header) < HEADER_LEN or header[PREAMBLE_LEN:] != MAGIC:
+        with open_dicom(path) as ctx:
+            if ctx is None:
                 return FileResult(path, is_dicom=False)
-            ctx = FileContext(
-                path=path,
-                fh=fh,
-                size=os.fstat(fh.fileno()).st_size,
-                preamble=header[:PREAMBLE_LEN],
-            )
-            findings = [f for check in checks for f in check(ctx)]
-    except OSError as exc:
+            findings, errors = [], []
+            for check in checks:
+                try:
+                    findings.extend(check(ctx))
+                except Exception as exc:  # a scanner must survive hostile input; report, don't crash
+                    errors.append(f"{check.__module__}: {exc!r}")
+            return FileResult(path, True, findings, "; ".join(errors) or None)
+    except (OSError, ValueError) as exc:
         return FileResult(path, is_dicom=False, error=str(exc))
-    return FileResult(path, is_dicom=True, findings=findings)
 
 
 def scan_paths(paths: Iterable[str], checks: Iterable[Check] = ALL_CHECKS) -> Iterator[FileResult]:
