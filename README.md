@@ -105,7 +105,7 @@ radguard scan examples/
 radguard map examples/two-scans-one-file.dcm
 ```
 
-`radguard scan` takes files or directories, `--format json` for machine-readable output, and `--fail-on {info,low,medium,high,critical}` to choose the severity that makes it exit with status 1 (for CI and ingest pipelines).
+`radguard scan` takes files or directories, `--format json` for machine-readable output, and `--fail-on {info,low,medium,high,critical}` to choose the severity that makes it exit with status 1 (for CI and ingest pipelines). On machines whose application-control policy blocks unsigned launchers (such as Windows Smart App Control), `python -m radguard ...` runs the same commands.
 
 ## Roadmap
 
