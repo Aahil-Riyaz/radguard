@@ -8,6 +8,7 @@ import sys
 from collections import Counter
 
 from radguard import __version__, mapview
+from radguard.output import safe
 from radguard.findings import Severity
 from radguard.scanner import open_dicom, scan_paths
 
@@ -69,12 +70,13 @@ def _scan(args: argparse.Namespace) -> int:
         )
         sys.stdout.write("\n")
     else:
+        # Paths and details carry attacker-controlled text: everything printed goes through safe().
         for f in findings:
-            print(f"{str(f.severity).upper():<9} {f.check:<34} {f.path}")
-            print(f"{'':<9} {f.title}")
-            print(f"{'':<9} {f.detail}")
+            print(safe(f"{str(f.severity).upper():<9} {f.check:<34} {f.path}"))
+            print(safe(f"{'':<9} {f.title}"))
+            print(safe(f"{'':<9} {f.detail}"))
         for e in errors:
-            print(f"{'ERROR':<9} {e['path']}: {e['error']}", file=sys.stderr)
+            print(safe(f"{'ERROR':<9} {e['path']}: {e['error']}"), file=sys.stderr)
         counts = ", ".join(f"{n}={c}" for n, c in summary["findings"].items() if c)
         print(
             f"\nscanned {files} files: {dicom} DICOM, {skipped} skipped, "
@@ -88,12 +90,12 @@ def _map(args: argparse.Namespace) -> int:
     try:
         with open_dicom(args.path) as ctx:
             if ctx is None:
-                print(f"{args.path}: not a DICOM Part 10 file", file=sys.stderr)
+                print(safe(f"{args.path}: not a regular DICOM Part 10 file"), file=sys.stderr)
                 return 2
             for line in mapview.render(args.path, ctx.buf, ctx.parsed,
                                        max_depth=args.depth, show_phi=args.show_phi):
-                print(line)
+                print(safe(line))
     except OSError as exc:
-        print(f"{args.path}: {exc}", file=sys.stderr)
+        print(safe(f"{args.path}: {exc}"), file=sys.stderr)
         return 2
     return 0

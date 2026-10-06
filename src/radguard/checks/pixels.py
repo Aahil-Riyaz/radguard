@@ -13,6 +13,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 
 from radguard import signatures
+from radguard.carving import MatchIndex
 from radguard.context import FileContext
 from radguard.dicom import values
 from radguard.dicom.model import DOUBLE_PIXEL_DATA, FLOAT_PIXEL_DATA, PIXEL_DATA, Element, ParsedFile
@@ -57,10 +58,10 @@ def check(ctx: FileContext) -> Iterator[Finding]:
     geometry = (first(ROWS), first(COLUMNS), first(SAMPLES_PER_PIXEL) or 1,
                 first(NUMBER_OF_FRAMES) or 1, first(BITS_ALLOCATED))
     for px in pixels:
-        yield from _check_pixel_data(ctx.path, buf, parsed, px, *geometry)
+        yield from _check_pixel_data(ctx.path, buf, parsed, ctx.matches(domain), px, *geometry)
 
 
-def _check_pixel_data(path: str, buf, parsed: ParsedFile, px: Element,
+def _check_pixel_data(path: str, buf, parsed: ParsedFile, index: MatchIndex, px: Element,
                       rows, cols, samples: int, frames: int, bits) -> Iterator[Finding]:
     if px.undefined != parsed.syntax.encapsulated:
         expected_form = "encapsulated" if parsed.syntax.encapsulated else "native"
@@ -103,7 +104,7 @@ def _check_pixel_data(path: str, buf, parsed: ParsedFile, px: Element,
         start, n = px.value_offset + padded, actual - padded
         frame_bytes = expected // frames
         hidden_frames = n // frame_bytes if frame_bytes else 0
-        hits = signatures.scan(buf, start, px.end)
+        hits = index.within(start, px.end)
         sample = bytes(buf[start : start + min(n, 4096)])
         if hits:
             severity = max(Severity.HIGH, *(m.signature.severity for m in hits))
@@ -115,7 +116,7 @@ def _check_pixel_data(path: str, buf, parsed: ParsedFile, px: Element,
                   f"{start:#x} are outside the image the header describes: viewers that honour the header "
                   "never display them, while lenient decoders return them as extra frames")
         if hits:
-            detail += "; contains " + ", ".join(f"{m.signature.label} at {m.offset:#x}" for m in hits[:5])
+            detail += "; contains " + ", ".join(signatures.match_text(m) for m in hits[:5])
         detail += "; " + signatures.describe(buf, start, px.end)
         title = (f"{hidden_frames} hidden frame(s) after the declared image" if hidden_frames
                  else f"{n:,} bytes hidden after the last pixel")

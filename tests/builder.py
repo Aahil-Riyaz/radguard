@@ -127,5 +127,9 @@ def fake_pe(size: int = 128) -> bytes:
 
 
 def fake_elf(size: int = 64) -> bytes:
-    """An inert ELF identification header (64-bit, little-endian, version 1). No code."""
-    return b"\x7fELF\x02\x01\x01" + bytes(size - 7)
+    """An inert ELF header: 64-bit little-endian executable for x86-64, no program headers, no code."""
+    data = bytearray(size)
+    data[0:7] = b"\x7fELF\x02\x01\x01"
+    struct.pack_into("<HHI", data, 16, 2, 0x3E, 1)  # e_type=EXEC, e_machine=x86-64, e_version=1
+    return bytes(data)
+

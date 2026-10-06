@@ -1,58 +1,39 @@
-"""Shared file-signature engine: what does a run of bytes look like it *is*?
+"""File signatures: what does a run of bytes look like it *is*?
 
-Used wherever bytes have no business containing another file format: the
-preamble, bytes the DICOM grammar cannot account for, pixel-data slack and
-trailing padding.
+Two ways to match:
+
+* `match_prefix` identifies a format whose magic sits at a known offset (the
+  preamble). Short magics are fine there because the position is fixed.
+* `radguard.carving` searches whole buffers. Anywhere-in-the-file search needs
+  far more evidence per hit, or random pixel data produces false positives:
+  "#!" turns up every 64 KiB of noise. So each signature has longer
+  `scan_magics` plus a structural validator, and only validated hits count.
+  With validation the expected false-positive rate in random data is below
+  one per terabyte for every signature.
 """
 
 from __future__ import annotations
 
 import math
+import re
 import struct
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from radguard.findings import Severity
+
+Validator = Callable[[object, int], "str | None"]  # (buffer, offset) -> detail, or None to reject
 
 
 @dataclass(frozen=True)
 class Signature:
     kind: str
     label: str
-    magics: tuple[bytes, ...]
+    magics: tuple[bytes, ...]  # matched at a known offset
     severity: Severity
-
-    @property
-    def scan_magics(self) -> tuple[bytes, ...]:
-        # Searching anywhere in a region needs stricter magics than matching at
-        # a known offset: "#!" occurs by chance every few KiB of random data.
-        if self.kind == "shebang":
-            return (b"#!/",)
-        if self.kind == "markup":
-            return self.magics + tuple(m.upper() for m in self.magics)
-        return self.magics
-
-
-SIGNATURES: tuple[Signature, ...] = (
-    Signature("pe", "Windows PE executable", (b"MZ",), Severity.CRITICAL),
-    Signature("elf", "ELF executable", (b"\x7fELF",), Severity.CRITICAL),
-    Signature("macho", "Mach-O executable",
-              (b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe"),
-              Severity.CRITICAL),
-    Signature("fat-or-class", "Mach-O universal binary or Java class", (b"\xca\xfe\xba\xbe",), Severity.HIGH),
-    Signature("shebang", "script (#! interpreter line)", (b"#!",), Severity.HIGH),
-    Signature("zip", "ZIP container (JAR/APK/Office/archive)", (b"PK\x03\x04",), Severity.HIGH),
-    Signature("ole", "OLE compound file (MSI/legacy Office)", (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",), Severity.HIGH),
-    Signature("markup", "HTML/XML/SVG markup",
-              (b"<html", b"<!doctype", b"<script", b"<svg", b"<?xml", b"<iframe"), Severity.HIGH),
-    Signature("pdf", "PDF document", (b"%PDF",), Severity.MEDIUM),
-    Signature("rtf", "RTF document", (b"{\\rtf",), Severity.MEDIUM),
-    Signature("archive", "7z/RAR archive", (b"7z\xbc\xaf\x27\x1c", b"Rar!\x1a\x07"), Severity.MEDIUM),
-)
-
-SCAN_LIMIT = 64 << 20  # bytes searched per region
-MAX_HITS = 16  # confirmed matches kept per magic
-MAX_CANDIDATES = 4096  # raw magic hits examined per magic (bounds work on hostile input)
+    scan_magics: tuple[bytes, ...]  # searched for anywhere
+    validate: Validator | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +42,14 @@ class Match:
     signature: Signature
     detail: str = ""
 
+
+def printable(data: bytes, limit: int = 40) -> str:
+    """ASCII-only rendering of attacker-controlled bytes, safe to embed in a finding."""
+    text = "".join(chr(b) if 0x20 <= b < 0x7F else "." for b in data[:limit])
+    return text + ("..." if len(data) > limit else "")
+
+
+# -- validators ----------------------------------------------------------------
 
 def pe_header(buf, mz_offset: int) -> int | None:
     """Offset of the "PE\\0\\0" header that the MZ stub at `mz_offset` points to, if valid."""
@@ -71,6 +60,109 @@ def pe_header(buf, mz_offset: int) -> int | None:
     if 0 < e_lfanew and pe + 4 <= len(buf) and buf[pe : pe + 4] == b"PE\x00\x00":
         return pe
     return None
+
+
+def _pe(buf, pos):
+    pe = pe_header(buf, pos)
+    return f"PE header at {pe:#x}" if pe is not None else None
+
+
+_ELF_TYPES = {1: "relocatable object", 2: "executable", 3: "shared object", 4: "core dump"}
+
+
+def _elf(buf, pos):
+    if pos + 18 > len(buf):
+        return None
+    cls, data, version = buf[pos + 4], buf[pos + 5], buf[pos + 6]
+    if cls not in (1, 2) or data not in (1, 2) or version != 1:
+        return None
+    (e_type,) = struct.unpack_from("<H" if data == 1 else ">H", buf, pos + 16)
+    if e_type not in _ELF_TYPES:
+        return None
+    return f"{32 * cls}-bit {_ELF_TYPES[e_type]}"
+
+
+_MACHO_CPUS = {7: "x86", 0x01000007: "x86_64", 12: "ARM", 0x0100000C: "ARM64", 18: "PowerPC", 0x01000012: "PowerPC64"}
+
+
+def _macho(buf, pos):
+    if pos + 8 > len(buf):
+        return None
+    little = buf[pos] in (0xCE, 0xCF)
+    (cpu,) = struct.unpack_from("<I" if little else ">I", buf, pos + 4)
+    return _MACHO_CPUS.get(cpu)
+
+
+def _fat_or_class(buf, pos):
+    if pos + 8 > len(buf):
+        return None
+    first, second = struct.unpack_from(">HH", buf, pos + 4)
+    if 45 <= second <= 80:  # Java: minor, major version
+        return f"Java class file, version {second}.{first}"
+    (count,) = struct.unpack_from(">I", buf, pos + 4)
+    return f"universal binary with {count} architectures" if 1 <= count <= 32 else None
+
+
+_INTERPRETER = re.compile(rb"#!(/[\w./-]{2,64})[ \t]*[\w./ -]{0,64}\r?\n")
+
+
+def _shebang(buf, pos):
+    m = _INTERPRETER.match(bytes(buf[pos : pos + 160]))
+    return f"interpreter {printable(m.group(1))}" if m else None
+
+
+_ZIP_METHODS = {0, 8, 9, 12, 14, 93, 95, 98, 99}
+
+
+def _zip(buf, pos):
+    if pos + 30 > len(buf):
+        return None
+    version, _, method = struct.unpack_from("<HHH", buf, pos + 4)
+    name_len, extra_len = struct.unpack_from("<HH", buf, pos + 26)
+    if version > 63 or method not in _ZIP_METHODS or not 1 <= name_len <= 1024:
+        return None
+    return f"first entry {printable(bytes(buf[pos + 30 : pos + 30 + name_len]))}"
+
+
+def _ole(buf, pos):
+    return "" if buf[pos + 28 : pos + 30] == b"\xfe\xff" else None  # byte-order mark
+
+
+def _pdf(buf, pos):
+    version = bytes(buf[pos + 5 : pos + 8])
+    return f"PDF {version.decode()}" if re.fullmatch(rb"\d\.\d", version) else None
+
+
+def _rtf(buf, pos):
+    return "" if pos + 6 <= len(buf) and (chr(buf[pos + 5]).isalnum() or buf[pos + 5] == 0x5C) else None
+
+
+def _upper(*magics: bytes) -> tuple[bytes, ...]:
+    return magics + tuple(m.upper() for m in magics)
+
+
+SIGNATURES: tuple[Signature, ...] = (
+    Signature("pe", "Windows PE executable", (b"MZ",), Severity.CRITICAL, (b"MZ",), _pe),
+    Signature("elf", "ELF executable", (b"\x7fELF",), Severity.CRITICAL, (b"\x7fELF",), _elf),
+    Signature("macho", "Mach-O executable",
+              (b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe"),
+              Severity.CRITICAL,
+              (b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe"), _macho),
+    Signature("fat-or-class", "Mach-O universal binary or Java class", (b"\xca\xfe\xba\xbe",), Severity.HIGH,
+              (b"\xca\xfe\xba\xbe",), _fat_or_class),
+    Signature("shebang", "script (#! interpreter line)", (b"#!",), Severity.HIGH, (b"#!/",), _shebang),
+    Signature("zip", "ZIP container (JAR/APK/Office/archive)", (b"PK\x03\x04",), Severity.HIGH,
+              (b"PK\x03\x04",), _zip),
+    Signature("ole", "OLE compound file (MSI/legacy Office)", (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",), Severity.HIGH,
+              (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",), _ole),
+    Signature("markup", "HTML/XML/SVG markup",
+              (b"<html", b"<!doctype", b"<script", b"<svg", b"<?xml", b"<iframe"), Severity.HIGH,
+              _upper(b"<script", b"<html", b"<!doctype html", b"<iframe", b"<svg ", b"<svg>", b"<?xml ")),
+    Signature("pdf", "PDF document", (b"%PDF",), Severity.MEDIUM, (b"%PDF-",), _pdf),
+    Signature("rtf", "RTF document", (b"{\\rtf",), Severity.MEDIUM, (b"{\\rtf",), _rtf),
+    Signature("archive", "7z/RAR archive", (b"7z\xbc\xaf\x27\x1c", b"Rar!\x1a\x07"), Severity.MEDIUM,
+              (b"7z\xbc\xaf\x27\x1c", b"Rar!\x1a\x07")),
+)
 
 
 def match_prefix(buf, start: int, end: int) -> Match | None:
@@ -85,37 +177,9 @@ def match_prefix(buf, start: int, end: int) -> Match | None:
     return None
 
 
-def scan(buf, start: int, end: int, *, limit: int = SCAN_LIMIT) -> list[Match]:
-    """Find embedded files anywhere in buf[start:end], keeping only confirmed matches."""
-    end = min(end, len(buf), start + limit)
-    hits: list[Match] = []
-    for sig in SIGNATURES:
-        for magic in sig.scan_magics:
-            found = candidates = 0
-            pos = buf.find(magic, start, end)
-            while pos != -1 and found < MAX_HITS and candidates < MAX_CANDIDATES:
-                candidates += 1
-                match = _confirm(buf, pos, sig)
-                if match:
-                    hits.append(match)
-                    found += 1
-                pos = buf.find(magic, pos + 1, end)
-    hits.sort(key=lambda m: m.offset)
-    return hits
-
-
-def _confirm(buf, pos: int, sig: Signature) -> Match | None:
-    if sig.kind == "pe":
-        # A bare "MZ" appears by chance every 64 KiB of random data; require
-        # the stub's e_lfanew pointer to land on a real PE header.
-        pe = pe_header(buf, pos)
-        return Match(pos, sig, f"PE header at {pe:#x}") if pe is not None else None
-    if sig.kind == "elf":
-        # EI_CLASS and EI_DATA must be 1 or 2, EI_VERSION must be 1.
-        if pos + 7 <= len(buf) and buf[pos + 4] in (1, 2) and buf[pos + 5] in (1, 2) and buf[pos + 6] == 1:
-            return Match(pos, sig)
-        return None
-    return Match(pos, sig)
+def match_text(match: Match) -> str:
+    extra = f" ({match.detail})" if match.detail else ""
+    return f"{match.signature.label} at {match.offset:#x}{extra}"
 
 
 def entropy(data: bytes) -> float:
@@ -129,9 +193,9 @@ def describe(buf, start: int, end: int, sample: int = 4096) -> str:
     data = bytes(buf[start : min(end, start + sample)])
     if not data:
         return "empty"
-    printable = sum(32 <= b < 127 for b in data) / len(data)
+    share = sum(32 <= b < 127 for b in data) / len(data)
     scope = f" over the first {sample:,} bytes" if end - start > sample else ""
     return (
         f"first bytes {data[:16].hex(' ')}; "
-        f"entropy {entropy(data):.2f} bits/byte{scope}; {printable:.0%} printable"
+        f"entropy {entropy(data):.2f} bits/byte{scope}; {share:.0%} printable"
     )

@@ -12,10 +12,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from radguard import signatures
+from radguard.carving import Exhaustion
 from radguard.context import FileContext
 from radguard.dicom import coverage
 from radguard.dicom.model import PIXEL_DATA, TRAILING_PADDING, Anomaly
 from radguard.findings import Finding, Severity
+from radguard.signatures import Match
 
 C, H, M, L = Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW
 _DIFFERENTIAL = "different DICOM readers will interpret these bytes differently"
@@ -74,6 +76,9 @@ RULES: dict[str, tuple[Severity, str, str]] = {
                                   "not allowed; decoders cannot find the fragment's end"),
     "bad-offset-table": (M, "Basic Offset Table points outside the fragments",
                          "decoders that seek frames through the table read the wrong bytes"),
+    "suppressed": (M, "Anomaly flood",
+                   "a file that trips the same rule thousands of times is built to flood analysis; "
+                   "only the first occurrences are reported"),
 }
 
 
@@ -84,14 +89,17 @@ def check(ctx: FileContext) -> Iterator[Finding]:
         domains.append(("inflated", parsed.inflated, parsed.inflated_regions, len(parsed.inflated)))
 
     # An anomaly that made the parser give up explains the gap that starts where it stopped.
-    causes = {(a.domain, a.offset): a for a in parsed.anomalies}
+    causes = {(a.domain, a.offset): a for a in parsed.anomalies if a.code != "suppressed"}
     explained: set[int] = set()
     for domain, buf, regions, size in domains:
+        index = ctx.matches(domain)
         for start, end in coverage.gaps(regions, size):
             cause = causes.get((domain, start))
             if cause is not None:
                 explained.add(id(cause))
-            yield _gap_finding(ctx.path, buf, start, end, domain, cause)
+            yield _gap_finding(ctx.path, buf, start, end, domain, cause, index.within(start, end))
+        for gap in index.exhausted:
+            yield _incomplete(ctx.path, domain, gap)
 
     for a in parsed.anomalies:
         if a.code == "duplicate-tag" and a.tag == PIXEL_DATA:
@@ -103,12 +111,13 @@ def check(ctx: FileContext) -> Iterator[Finding]:
 
     for el in parsed.elements:
         if el.tag == TRAILING_PADDING and el.depth == 0:
-            yield from _padding(ctx, parsed.buffer(el.domain, ctx.buf), el)
+            hits = ctx.matches(el.domain).within(el.value_offset, el.end)
+            yield from _padding(ctx.path, parsed.buffer(el.domain, ctx.buf), el, hits)
 
 
-def _gap_finding(path: str, buf, start: int, end: int, domain: str, cause: Anomaly | None) -> Finding:
+def _gap_finding(path: str, buf, start: int, end: int, domain: str, cause: Anomaly | None,
+                 hits: list[Match]) -> Finding:
     n = end - start
-    hits = signatures.scan(buf, start, end)
     if hits:
         top = max(hits, key=lambda m: m.signature.severity)
         check_id = "structure.hidden-payload"
@@ -122,32 +131,36 @@ def _gap_finding(path: str, buf, start: int, end: int, domain: str, cause: Anoma
     if cause is not None:
         parts.append(f"parsing stopped because {cause.message}")
     if hits:
-        parts.append("contains " + ", ".join(_hit(m) for m in hits[:5]))
+        parts.append("contains " + ", ".join(signatures.match_text(m) for m in hits[:5]))
     parts.append(signatures.describe(buf, start, end))
     detail = f"{_where(domain)}bytes {start:#x}-{end:#x}: " + "; ".join(parts)
     return Finding(check_id, severity, title, detail, path, start)
 
 
-def _padding(ctx: FileContext, buf, el) -> Iterator[Finding]:
+def _padding(path: str, buf, el, hits: list[Match]) -> Iterator[Finding]:
     # Data Set Trailing Padding has no meaning (PS3.10 7.2), so readers skip it unread.
     data = bytes(buf[el.value_offset : el.end])
     nonzero = len(data) - data.count(0)
     if not nonzero:
         return
-    hits = signatures.scan(buf, el.value_offset, el.end)
     severity = max(Severity.HIGH, *(m.signature.severity for m in hits)) if hits else Severity.MEDIUM
     detail = (f"{_where(el.domain)}(FFFC,FFFC) Data Set Trailing Padding holds {nonzero:,} non-zero bytes; "
               "readers skip padding without looking at it")
     if hits:
-        detail += "; contains " + ", ".join(_hit(m) for m in hits[:5])
+        detail += "; contains " + ", ".join(signatures.match_text(m) for m in hits[:5])
     detail += "; " + signatures.describe(buf, el.value_offset, el.end)
     yield Finding("structure.nonzero-padding", severity, "Data hidden in trailing padding",
-                  detail, ctx.path, el.value_offset)
+                  detail, path, el.value_offset)
 
 
-def _hit(match: signatures.Match) -> str:
-    extra = f" ({match.detail})" if match.detail else ""
-    return f"{match.signature.label} at {match.offset:#x}{extra}"
+def _incomplete(path: str, domain: str, gap: Exhaustion) -> Finding:
+    # Never let a budget turn into a blind spot: say exactly what was not examined.
+    adversarial = gap.reason != "size"
+    return Finding(
+        "structure.analysis-incomplete", Severity.HIGH if adversarial else Severity.LOW,
+        "File built to exhaust analysis" if adversarial else "File larger than the inspection window",
+        f"{_where(domain)}{gap.detail} (from offset {gap.offset:#x})", path, gap.offset,
+    )
 
 
 def _where(domain: str) -> str:

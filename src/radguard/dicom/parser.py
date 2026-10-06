@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import struct
 import zlib
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 
 from radguard.dicom import dictionary, uids
 from radguard.dicom.model import (
@@ -46,11 +47,33 @@ _ENCODINGS = {
 }
 
 
+# Each nesting level costs three Python frames (dataset -> value -> sequence);
+# this ceiling keeps the deepest permitted parse far from the interpreter's
+# recursion limit, so no Limits value can turn into a RecursionError.
+MAX_DEPTH_CEILING = 128
+# Anomalies kept per code per file; the rest are counted and summarised.
+MAX_ANOMALIES_PER_CODE = 50
+
+
 @dataclass(frozen=True)
 class Limits:
     max_depth: int = 32
     max_elements: int = 1_000_000
     max_inflated: int = 256 << 20
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.max_depth <= MAX_DEPTH_CEILING:
+            raise ValueError(f"max_depth must be between 1 and {MAX_DEPTH_CEILING}")
+        if self.max_elements < 1 or self.max_inflated < 0:
+            raise ValueError("max_elements must be positive and max_inflated non-negative")
+
+
+@dataclass
+class _Tally:
+    """Anomaly counts shared by every parser working on one file."""
+    counts: Counter = field(default_factory=Counter)
+    first_suppressed: dict[str, int] = field(default_factory=dict)
+    total: int = 0
 
 
 class _Desync(Exception):
@@ -59,9 +82,18 @@ class _Desync(Exception):
 
 def parse(buf, limits: Limits = Limits()) -> ParsedFile:
     """Parse a Part 10 file. `buf` is bytes or a read-only mmap starting with preamble + DICM."""
+    tally = _Tally()
+    result = _parse(buf, limits, tally)
+    for code, offset in tally.first_suppressed.items():
+        extra = tally.counts[code] - MAX_ANOMALIES_PER_CODE
+        result.anomalies.append(Anomaly("suppressed", f"{extra:,} more '{code}' anomalies were not recorded", offset))
+    return result
+
+
+def _parse(buf, limits: Limits, tally: _Tally) -> ParsedFile:
     anomalies: list[Anomaly] = []
     elements: list[Element] = []
-    p = _Parser(buf, limits, "file", anomalies, elements)
+    p = _Parser(buf, limits, "file", anomalies, elements, tally)
     p.region(0, PREAMBLE_LEN, PREAMBLE)
     p.region(PREAMBLE_LEN, HEADER_LEN, MAGIC)
 
@@ -90,7 +122,7 @@ def parse(buf, limits: Limits = Limits()) -> ParsedFile:
     if syntax.deflated:
         data = p.inflate(pos)
         if data is not None:
-            inner = _Parser(data, limits, "inflated", anomalies, elements)
+            inner = _Parser(data, limits, "inflated", anomalies, elements, tally)
             try:
                 inner.dataset(0, len(data), 0, None, False, True)
             except _Desync:
@@ -107,7 +139,9 @@ def parse(buf, limits: Limits = Limits()) -> ParsedFile:
 
 
 class _Parser:
-    def __init__(self, buf, limits: Limits, domain: str, anomalies: list[Anomaly], elements: list[Element]):
+    def __init__(self, buf, limits: Limits, domain: str, anomalies: list[Anomaly], elements: list[Element],
+                 tally: _Tally):
+        self.tally = tally
         self.buf = buf
         self.size = len(buf)
         self.limits = limits
@@ -117,6 +151,12 @@ class _Parser:
         self.regions: list[Region] = []
 
     def note(self, code: str, message: str, offset: int, tag: int | None = None) -> None:
+        tally = self.tally
+        tally.total += 1
+        tally.counts[code] += 1
+        if tally.counts[code] > MAX_ANOMALIES_PER_CODE:
+            tally.first_suppressed.setdefault(code, offset)
+            return
         self.anomalies.append(Anomaly(code, message, offset, tag, self.domain))
 
     def region(self, start: int, end: int, kind: str) -> None:
@@ -318,14 +358,17 @@ class _Parser:
         """A value of unknown VR that starts with an Item tag is probably a sequence (encoded
         implicit VR LE, PS3.5 6.2.2). Parse it as one, and roll back unless it parses cleanly."""
         marks = len(self.anomalies), len(self.elements), len(self.regions)
+        tally = self.tally
+        saved = tally.total, Counter(tally.counts), dict(tally.first_suppressed)
         try:
             ok = self._sequence(idx, el.value_offset, vend, depth + 1, True, True, undefined=False) == vend
         except _Desync:
             ok = False
-        if ok and len(self.anomalies) == marks[0]:
+        if ok and tally.total == saved[0]:  # counts suppressed anomalies too
             el.vr, el.vr_source = "SQ", "inferred"
             return
         del self.anomalies[marks[0]:], self.elements[marks[1]:], self.regions[marks[2]:]
+        tally.total, tally.counts, tally.first_suppressed = saved
         self.region(el.value_offset, vend, VALUE)
 
     # -- encapsulated pixel data ---------------------------------------------------

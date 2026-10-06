@@ -5,22 +5,23 @@ from __future__ import annotations
 from collections import Counter
 
 from radguard import signatures
+from radguard.carving import MatchIndex, carve
 from radguard.dicom import ParsedFile, coverage, dictionary, values
 from radguard.dicom.model import ITEM, PIXEL_DATA, Region, tag_str
 
 
 def render(path: str, buf, parsed: ParsedFile, *, max_depth: int | None = None, show_phi: bool = False) -> list[str]:
     lines = [path, f"{parsed.size:,} bytes, {parsed.syntax.name}", "", f"{'offset':>8}  {'length':>10}  structure"]
-    lines += _domain(buf, parsed, "file", parsed.regions, parsed.size, max_depth, show_phi)
+    lines += _domain(buf, parsed, "file", parsed.regions, parsed.size, carve(buf), max_depth, show_phi)
     if parsed.inflated is not None:
         lines += ["", f"inflated dataset: {len(parsed.inflated):,} bytes (offsets below are within it)"]
         lines += _domain(parsed.inflated, parsed, "inflated", parsed.inflated_regions,
-                         len(parsed.inflated), max_depth, show_phi)
+                         len(parsed.inflated), carve(parsed.inflated), max_depth, show_phi)
     lines += ["", _coverage_line(parsed.regions, parsed.size)]
     return lines
 
 
-def _domain(buf, parsed: ParsedFile, domain: str, regions: list[Region], size: int,
+def _domain(buf, parsed: ParsedFile, domain: str, regions: list[Region], size: int, index: MatchIndex,
             max_depth: int | None, show_phi: bool) -> list[str]:
     rows: list[tuple[int, int, str]] = []  # (offset, order at that offset, line)
     if domain == "file":
@@ -48,7 +49,7 @@ def _domain(buf, parsed: ParsedFile, domain: str, regions: list[Region], size: i
         if a.domain == domain:
             rows.append((a.offset, 2, f"{a.offset:08X}  {'':>10}  !! {a.code}: {a.message}"))
     for start, end in coverage.gaps(regions, size):
-        hits = signatures.scan(buf, start, end)
+        hits = index.within(start, end)
         found = ("contains " + ", ".join(f"{m.signature.label} at {m.offset:#x}" for m in hits[:3]) + "; ") if hits else ""
         rows.append((start, 3, f"{start:08X}  {end - start:>10,}  ?? UNEXPLAINED  {found}{signatures.describe(buf, start, end)}"))
 

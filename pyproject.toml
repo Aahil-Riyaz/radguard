@@ -21,7 +21,10 @@ dependencies = []
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
-    "hypothesis>=6.100",
+    # 6.156+ ships an unsigned native extension that Windows Smart App Control /
+    # WDAC policies block; the pure-Python releases run everywhere.
+    "hypothesis>=6.100,<6.156; sys_platform == 'win32'",
+    "hypothesis>=6.100; sys_platform != 'win32'",
     # Reference implementation for differential tests (what real software sees)
     "pydicom>=3.0",
     "numpy>=1.26",
