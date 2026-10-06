@@ -3,6 +3,7 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:  # "Run workflow" button on the Actions tab
 
 jobs:
   lint:
