@@ -133,3 +133,42 @@ def fake_elf(size: int = 64) -> bytes:
     struct.pack_into("<HHI", data, 16, 2, 0x3E, 1)  # e_type=EXEC, e_machine=x86-64, e_version=1
     return bytes(data)
 
+
+def _segment(code: int, body: bytes) -> bytes:
+    return b"\xff" + bytes([code]) + struct.pack(">H", len(body) + 2) + body
+
+
+def jpeg(entropy: bytes = b"\x12\x34\xff\x00\x56\xff\xd0\x78", *, app1: bytes = b"") -> bytes:
+    """A structurally complete baseline JPEG (T.81): SOI, APP0, [APP1], DQT, SOF0, DHT, SOS, data, EOI.
+
+    Tables are zero-filled: it exercises the marker structure, not a decoder.
+    """
+    out = b"\xff\xd8" + _segment(0xE0, b"JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00")
+    if app1:
+        out += _segment(0xE1, app1)
+    out += _segment(0xDB, bytes(65)) + _segment(0xC0, b"\x08\x00\x08\x00\x08\x01\x01\x11\x00")
+    out += _segment(0xC4, bytes(29)) + _segment(0xDA, b"\x01\x01\x00\x00\x3f\x00")
+    return out + entropy + b"\xff\xd9"
+
+
+def j2k(tile: bytes = b"\x01\x02\x03\x04", *, psot_zero: bool = False, comment: bytes = b"") -> bytes:
+    """A structurally complete JPEG 2000 codestream (T.800): SOC, SIZ, COD, QCD, [COM], SOT, SOD, data, EOC."""
+    def seg(marker: int, body: bytes) -> bytes:
+        return struct.pack(">HH", marker, len(body) + 2) + body
+
+    main = b"\xff\x4f" + seg(0xFF51, bytes(38)) + seg(0xFF52, bytes(10)) + seg(0xFF5C, bytes(3))
+    if comment:
+        main += seg(0xFF64, comment)
+    tile_part = b"\xff\x93" + tile
+    sot = struct.pack(">HHHIBB", 0xFF90, 10, 0, 0 if psot_zero else 12 + len(tile_part), 0, 1)
+    return main + sot + tile_part + b"\xff\xd9"
+
+
+def rle_frame(segments: int = 1, payload: bytes = b"\x00\x00") -> bytes:
+    offsets = [64 + i * len(payload) for i in range(segments)] + [0] * (15 - segments)
+    return struct.pack("<16I", segments, *offsets) + payload * segments
+
+
+def even(data: bytes) -> bytes:
+    """Fragments are even-length; pad with the one zero byte PS3.5 allows."""
+    return data + b"\x00" if len(data) % 2 else data
