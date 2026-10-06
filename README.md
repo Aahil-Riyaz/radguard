@@ -71,15 +71,29 @@ The most dangerous files aren't malformed, just *ambiguous*: different software 
 
 - **Preamble polyglots:** PE (with `e_lfanew` followed to a real PE header), ELF, Mach-O, scripts, ZIP/JAR, OLE/MSI, PDF, HTML/SVG
 - **Hidden payloads:** executables and archives in bytes outside the DICOM structure, after a deflate stream, or in trailing padding
-- **Pixel contract violations:** duplicate images, hidden frames and slack, truncated pixel data, 32-bit size overflow (heap-overflow trigger), encoding contradicting the transfer syntax
+- **Files inside attribute values:** every value is searched, and findings name the exact location, e.g. `(0008,1140) item 2 > (0029,1010) Private`
+- **Encapsulated documents:** declared MIME type checked against the real content; executables inside documents
+- **Compressed frames:** codestream walkers for JPEG, JPEG-LS and JPEG 2000 follow the marker structure to each frame's true end (not the first `FF D9`: EXIF thumbnails and J2K comments contain those too), then flag data after the end, a second hidden image, frames that aren't the declared codec, malformed codestreams and undeclared frames
+- **Pixel contract violations:** duplicate images, hidden frames and slack, executables stored as pixels, truncated pixel data, 32-bit size overflow (heap-overflow trigger), encoding contradicting the transfer syntax
 - **30+ structural anomalies**, each with the reason it matters: lying lengths, transfer-syntax mismatch, VR confusion, unterminated sequences, decompression bombs, recursion bombs, corrupt fragment tables, ...
 
 ## Engineering
 
 - **Parser written from scratch** for every native encoding (implicit/explicit, little/big endian, deflated), nested and undefined-length sequences, encapsulated pixel data and Basic Offset Tables. Zero runtime dependencies; files are memory-mapped, never copied.
 - **Never crashes on hostile input.** Errors become anomalies; parsing resumes at the nearest boundary whose length can still be trusted.
-- **Fuzzed:** Hypothesis property tests check that byte accounting is exact for any input (100,000 cases in deep mode: `HYPOTHESIS_PROFILE=deep pytest tests/test_fuzz.py`). The harness is mutation-tested: a planted length-trusting bug is caught in about a second.
+- **Fuzzed:** Hypothesis property tests check that the parser, the codec walkers and every check terminate and that byte accounting is exact for any input (150,000 cases in deep mode: `HYPOTHESIS_PROFILE=deep pytest tests/test_fuzz.py`). The harness is mutation-tested: a planted length-trusting bug is caught in about a second.
 - **Every claim about other software is a test**, so documentation can't drift from reality.
+
+## Security of RadGuard itself
+
+A scanner that reads hostile files is itself a target. RadGuard has been [self-audited](docs/security/self-audit.md) against an attacker who controls file bytes, file names, the directory layout and timing: 9 findings, all fixed, each pinned by a regression test named after its ID ([`tests/test_hostile.py`](tests/test_hostile.py)).
+
+- **Budgets fail loud.** Every limit (search window, candidate budget, depth, element count, inflated size) is reported when reached. Flooding a file with decoy signatures to bury a real one produces a high finding instead of a blind spot.
+- **Hostile file systems:** FIFOs and device files are never opened for reading (race-free `fstat` on the descriptor); small files are read privately so a file truncated mid-scan can't crash the process.
+- **Safe output:** terminal escape sequences and Unicode bidi overrides in file names or contents are escaped before printing.
+- **Bounded work:** every loop over attacker data runs in C or advances by at least one structure, with caps; pathological inputs are timed in tests.
+
+Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 ## Quickstart
 
@@ -96,7 +110,8 @@ radguard map examples/two-scans-one-file.dcm
 ## Roadmap
 
 - [x] **L1 structure:** preamble polyglots, byte-coverage parser, hidden payloads, pixel contract, parser differentials
-- [ ] L1: carve every element value; encapsulated documents; private-tag analysis; SARIF output
+- [x] L1: value-level carving, encapsulated documents, codestream analysis, self-audit
+- [ ] L1: private-tag analysis; SARIF output; parallel scanning
 - [ ] **L2 privacy:** PHI in tags (PS3.15 Annex E) and burned-in pixel text (GPU OCR)
 - [ ] **L3 integrity:** CT tamper and deepfake detection, GPU-accelerated
 - [ ] **L4 provenance:** DICOM digital signatures

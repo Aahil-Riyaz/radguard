@@ -7,7 +7,7 @@ Every day gets one real, commit-sized task. If a day runs short, the minimum is 
 ### Week 1
 - [x] D1: Scaffold, preamble polyglot detection (PE/ELF/Mach-O/script/ZIP/OLE/PDF/markup), tests, CI
 - [x] D2: Byte-coverage DICOM parser written from scratch (all native encodings, sequences, encapsulated, deflate); hidden-payload, pixel-contract and 31 structural checks; `radguard map`; fuzzing; differential tests vs pydicom
-- [ ] D3: Carve every element value (OB/OW/UN/UT/private) and encapsulated fragment; Encapsulated Document (0042,0011)
+- [x] D3: Self-audit (9 findings fixed, regression-tested); budgeted carving engine; value-level carving with element paths; encapsulated documents; JPEG/JPEG-LS/J2K/RLE codestream analysis
 - [ ] D4: Private-tag inventory: oversized or high-entropy private blobs
 - [ ] D5: SARIF output so findings show up in GitHub code scanning and SIEMs
 - [ ] D6: Multiprocessing; benchmark files/sec on 10k files

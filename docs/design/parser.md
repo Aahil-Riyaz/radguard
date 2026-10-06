@@ -67,6 +67,6 @@ The parser reports facts; `checks/structure.py` decides what they mean. Every an
 
 ## Known limitations
 
-- **Values of well-formed elements are not carved yet.** A payload inside an `OB`, `UN` or private value is structurally valid and therefore invisible to the coverage check. Roadmap day 3 runs the signature engine over every value.
-- **Implicit VR has no VR to validate**, so appended bytes can parse as a few plausible short elements before failing. They are still flagged (tag order, length overflow) and day 3 value carving catches embedded files regardless.
+- ~~Values of well-formed elements are not carved.~~ Resolved on day 3: `carving.py` searches the whole buffer once, under a budget that is reported when exhausted, and `checks/values.py` attributes every match to the attribute that holds it.
+- **Implicit VR has no VR to validate**, so appended bytes can parse as a few plausible short elements before failing. They are still flagged (tag order, length overflow), and whole-buffer carving finds embedded files regardless of how the bytes parse.
 - **The inflated domain** is reported in findings and in `radguard map`, but is not included in the file-level coverage percentage.
