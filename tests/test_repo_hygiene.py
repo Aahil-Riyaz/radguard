@@ -6,6 +6,7 @@ files must be pure ASCII; every other text file must be free of controls and
 invisible formatting characters.
 """
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -18,9 +19,13 @@ INVISIBLE = {*range(0x00, 0x09), *range(0x0B, 0x0D), *range(0x0E, 0x20), *range(
 
 
 def tracked_text_files():
-    for folder in ("src", "tests", "scripts", "docs", ".github"):
-        yield from (p for p in (ROOT / folder).rglob("*") if p.suffix in TEXT_SUFFIXES)
-    yield from (p for p in ROOT.glob("*") if p.suffix in TEXT_SUFFIXES)
+    try:  # what the repository actually contains, not build output or local files
+        names = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        paths = [ROOT / name for name in names.splitlines()]
+    except (OSError, subprocess.CalledProcessError):  # e.g. an exported tree without .git
+        paths = [p for folder in ("src", "tests", "scripts", "docs", ".github") for p in (ROOT / folder).rglob("*")
+                 if ".egg-info" not in str(p)] + list(ROOT.glob("*"))
+    return [p for p in paths if p.suffix in TEXT_SUFFIXES and p.is_file()]
 
 
 @pytest.mark.parametrize("path", sorted(tracked_text_files()), ids=lambda p: str(p.relative_to(ROOT)))
