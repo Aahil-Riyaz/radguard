@@ -94,6 +94,16 @@ def _check_pixel_data(path: str, buf, parsed: ParsedFile, index: MatchIndex, px:
 
     actual = px.end - px.value_offset
     padded = expected + (expected & 1)  # one pad byte keeps the value even-length
+    inside = index.within(px.value_offset, px.value_offset + min(actual, padded))
+    if inside:
+        # Validated signatures make chance matches in real pixel data vanishingly rare.
+        yield Finding(
+            "pixels.embedded-file", max(m.signature.severity for m in inside),
+            f"{inside[0].signature.label} stored as image pixels",
+            "the declared image area contains " + ", ".join(signatures.match_text(m) for m in inside[:5])
+            + "; viewers render it as noise, and nothing that only displays images will notice",
+            path, inside[0].offset,
+        )
     if actual < expected:
         yield Finding(
             "pixels.truncated", Severity.HIGH, "Pixel Data shorter than the image it describes",

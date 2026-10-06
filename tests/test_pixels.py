@@ -38,6 +38,12 @@ def test_executable_in_slack_is_critical():
     assert "Windows PE executable" in finding.detail
 
 
+def test_executable_stored_as_image_pixels():
+    finding = by_check(part10(image(16, 16, fake_pe(256))))["pixels.embedded-file"]
+    assert finding.severity is Severity.CRITICAL
+    assert "stored as image pixels" in finding.title
+
+
 def test_truncated_pixel_data():
     assert by_check(part10(image(8, 8, bytes(40))))["pixels.truncated"].severity is Severity.HIGH
 
