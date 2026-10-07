@@ -87,3 +87,28 @@ def test_rle_header():
     assert "segment count 0" in rle_problem(struct.pack("<16I", 0, *[0] * 15))
     assert "not increasing" in rle_problem(struct.pack("<16I", 2, 64, 64, *[0] * 13) + bytes(8))
     assert "shorter" in rle_problem(b"\x01")
+
+
+def test_jpeg_ff00_outside_entropy_data_is_not_a_marker():
+    end, problem = jpeg_end(b"\xff\xd8\xff\x00\x00\x04ab\xff\xd9")
+    assert end is None and "not a marker" in problem
+
+
+def test_jpeg_standalone_markers_before_the_scan_are_skipped():
+    data = b"\xff\xd8\xff\x01\xff\xd0" + jpeg()[2:]  # TEM and RST0 have no length field
+    assert jpeg_end(data) == (len(data), None)
+
+
+@pytest.mark.parametrize("walker,data", [
+    (jpeg_end, b"\xff\xd8" + b"\xff\xfe\x00\x02" * 10 + b"\xff\xd9"),  # ten empty COM segments
+    (j2k_end, j2k(comment=b"\x00\x01x")),
+])
+def test_walkers_stop_at_the_segment_cap(monkeypatch, walker, data):
+    monkeypatch.setattr("radguard.codecs.MAX_SEGMENTS", 3)
+    end, problem = walker(data)
+    assert end is None and "more than 3" in problem
+
+
+def test_rle_unused_offsets_must_be_zero():
+    frame = struct.pack("<16I", 1, 64, 99, *[0] * 13) + bytes(4)
+    assert "unused segment offsets" in rle_problem(frame)

@@ -1,6 +1,6 @@
 """Structure check: hidden payloads, unexplained bytes, abused padding, anomaly mapping."""
 
-import re
+import ast
 from pathlib import Path
 
 import pytest
@@ -68,9 +68,22 @@ def test_anomalies_become_findings_with_rationale():
     assert "readers" in finding.detail
 
 
+def emitted_anomaly_codes() -> set[str]:
+    """Every code the parser can emit, read from its syntax tree (independent of formatting)."""
+    tree = ast.parse(Path(__file__).parents[1].joinpath("src/radguard/dicom/parser.py").read_text(encoding="utf-8"))
+    codes: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant):
+            func = node.func
+            if (isinstance(func, ast.Attribute) and func.attr == "note") or (
+                    isinstance(func, ast.Name) and func.id == "Anomaly"):
+                codes.add(node.args[0].value)
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "code" for t in node.targets):
+            codes |= {n.value for n in ast.walk(node.value) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    return codes
+
+
 def test_every_anomaly_code_the_parser_can_emit_has_a_rule():
-    source = Path(__file__).parents[1].joinpath("src/radguard/dicom/parser.py").read_text()
-    emitted = set(re.findall(r'note\(\s*"([a-z-]+)"', source)) | set(re.findall(r'code = "([a-z-]+)" if', source))
-    emitted |= set(re.findall(r'else "([a-z-]+)"\n', source))
-    assert emitted, "pattern broke"
+    emitted = emitted_anomaly_codes()
+    assert {"invalid-vr", "meta-group-length-mismatch", "group-length-mismatch", "suppressed"} <= emitted
     assert emitted - set(RULES) == set()

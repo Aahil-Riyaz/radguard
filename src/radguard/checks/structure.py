@@ -15,7 +15,7 @@ from radguard import signatures
 from radguard.carving import Exhaustion
 from radguard.context import FileContext
 from radguard.dicom import coverage
-from radguard.dicom.model import PIXEL_DATA, TRAILING_PADDING, Anomaly
+from radguard.dicom.model import PIXEL_DATA, TRAILING_PADDING, Anomaly, Buffer, Element
 from radguard.findings import Finding, Severity
 from radguard.signatures import Match
 
@@ -76,6 +76,9 @@ RULES: dict[str, tuple[Severity, str, str]] = {
                                   "not allowed; decoders cannot find the fragment's end"),
     "bad-offset-table": (M, "Basic Offset Table points outside the fragments",
                          "decoders that seek frames through the table read the wrong bytes"),
+    "no-part10-header": (L, "No DICOM Part 10 header",
+                         "strict readers reject the file but lenient ones (pydicom's force mode, many toolkits) "
+                         "read it, so tools that only look for the DICM marker skip it entirely"),
     "suppressed": (M, "Anomaly flood",
                    "a file that trips the same rule thousands of times is built to flood analysis; "
                    "only the first occurrences are reported"),
@@ -115,7 +118,7 @@ def check(ctx: FileContext) -> Iterator[Finding]:
             yield from _padding(ctx.path, parsed.buffer(el.domain, ctx.buf), el, hits)
 
 
-def _gap_finding(path: str, buf, start: int, end: int, domain: str, cause: Anomaly | None,
+def _gap_finding(path: str, buf: Buffer, start: int, end: int, domain: str, cause: Anomaly | None,
                  hits: list[Match]) -> Finding:
     n = end - start
     if hits:
@@ -131,13 +134,13 @@ def _gap_finding(path: str, buf, start: int, end: int, domain: str, cause: Anoma
     if cause is not None:
         parts.append(f"parsing stopped because {cause.message}")
     if hits:
-        parts.append("contains " + ", ".join(signatures.match_text(m) for m in hits[:5]))
+        parts.append("contains " + ", ".join(signatures.match_text(m) for m in hits[:5]))  # pragma: no mutate (display)
     parts.append(signatures.describe(buf, start, end))
     detail = f"{_where(domain)}bytes {start:#x}-{end:#x}: " + "; ".join(parts)
     return Finding(check_id, severity, title, detail, path, start)
 
 
-def _padding(path: str, buf, el, hits: list[Match]) -> Iterator[Finding]:
+def _padding(path: str, buf: Buffer, el: Element, hits: list[Match]) -> Iterator[Finding]:
     # Data Set Trailing Padding has no meaning (PS3.10 7.2), so readers skip it unread.
     data = bytes(buf[el.value_offset : el.end])
     nonzero = len(data) - data.count(0)
@@ -147,7 +150,7 @@ def _padding(path: str, buf, el, hits: list[Match]) -> Iterator[Finding]:
     detail = (f"{_where(el.domain)}(FFFC,FFFC) Data Set Trailing Padding holds {nonzero:,} non-zero bytes; "
               "readers skip padding without looking at it")
     if hits:
-        detail += "; contains " + ", ".join(signatures.match_text(m) for m in hits[:5])
+        detail += "; contains " + ", ".join(signatures.match_text(m) for m in hits[:5])  # pragma: no mutate (display)
     detail += "; " + signatures.describe(buf, el.value_offset, el.end)
     yield Finding("structure.nonzero-padding", severity, "Data hidden in trailing padding",
                   detail, path, el.value_offset)

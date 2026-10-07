@@ -13,6 +13,8 @@ import pytest
 
 from builder import EXPLICIT_LE, PIXEL_DATA, el, fake_pe, image, part10
 from conftest import findings_for
+from radguard.checks import ALL_CHECKS
+from radguard.context import FileContext
 from radguard.dicom import parse
 
 pydicom = pytest.importorskip("pydicom")
@@ -77,3 +79,15 @@ def test_duplicate_attribute_last_one_wins():
     data = part10(el(0x00100010, "PN", "ALICE") + el(0x00100010, "PN", "MALLORY"))
     assert str(read(data).PatientName) == "MALLORY"
     assert "structure.duplicate-tag" in checks(data)
+
+
+def test_bare_dataset_is_read_by_lenient_readers():
+    data = image(8, 8) + fake_pe()  # no preamble, no DICM, no File Meta
+    ds = pydicom.dcmread(io.BytesIO(data), force=True)
+    assert ds.Rows == 8  # pydicom accepts it in force mode
+    assert {"structure.no-part10-header", "structure.hidden-payload"} <= checks_bare(data)
+
+
+def checks_bare(data):
+    ctx = FileContext("<memory>", data, len(data), part10=False)
+    return {f.check for check in ALL_CHECKS for f in check(ctx)}

@@ -31,7 +31,7 @@ class Finding:
     offset: int | None = None
     references: tuple[str, ...] = ()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "check": self.check,
             "severity": str(self.severity),

@@ -13,6 +13,7 @@ from radguard.checks import ALL_CHECKS
 from radguard.context import FileContext
 
 settings.register_profile("default", max_examples=400)
+settings.register_profile("quick", max_examples=50)  # mutation testing: thousands of suite runs
 settings.register_profile("deep", max_examples=25_000)
 settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "default"))
 

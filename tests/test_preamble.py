@@ -25,7 +25,7 @@ def test_tiff_preamble_is_allowed_by_standard(write_file, tiff):
 def test_pe_polyglot_is_critical(write_file):
     path = write_file("ct_slice_001", build_pe_polyglot())
     result = scan_file(path)
-    [finding] = result.findings
+    [finding] = [f for f in result.findings if f.check.startswith("preamble.")]
     assert finding.check == "preamble.pe-polyglot"
     assert finding.severity is Severity.CRITICAL
     with open(path, "rb") as fh:

@@ -7,10 +7,11 @@ from collections import Counter
 from radguard import signatures
 from radguard.carving import MatchIndex, carve
 from radguard.dicom import ParsedFile, coverage, dictionary, values
-from radguard.dicom.model import ITEM, PIXEL_DATA, Region, tag_str
+from radguard.dicom.model import ITEM, PIXEL_DATA, Buffer, Element, Region, tag_str
 
 
-def render(path: str, buf, parsed: ParsedFile, *, max_depth: int | None = None, show_phi: bool = False) -> list[str]:
+def render(path: str, buf: Buffer, parsed: ParsedFile, *, max_depth: int | None = None,
+           show_phi: bool = False) -> list[str]:
     lines = [path, f"{parsed.size:,} bytes, {parsed.syntax.name}", "", f"{'offset':>8}  {'length':>10}  structure"]
     lines += _domain(buf, parsed, "file", parsed.regions, parsed.size, carve(buf), max_depth, show_phi)
     if parsed.inflated is not None:
@@ -21,10 +22,10 @@ def render(path: str, buf, parsed: ParsedFile, *, max_depth: int | None = None, 
     return lines
 
 
-def _domain(buf, parsed: ParsedFile, domain: str, regions: list[Region], size: int, index: MatchIndex,
+def _domain(buf: Buffer, parsed: ParsedFile, domain: str, regions: list[Region], size: int, index: MatchIndex,
             max_depth: int | None, show_phi: bool) -> list[str]:
     rows: list[tuple[int, int, str]] = []  # (offset, order at that offset, line)
-    if domain == "file":
+    if domain == "file" and parsed.part10:
         pre = bytes(buf[:128])
         state = "all zero" if not any(pre) else signatures.describe(buf, 0, 128)
         rows.append((0, 0, f"{0:08X}  {128:>10}  Preamble ({state})"))
@@ -50,14 +51,16 @@ def _domain(buf, parsed: ParsedFile, domain: str, regions: list[Region], size: i
             rows.append((a.offset, 2, f"{a.offset:08X}  {'':>10}  !! {a.code}: {a.message}"))
     for start, end in coverage.gaps(regions, size):
         hits = index.within(start, end)
-        found = ("contains " + ", ".join(f"{m.signature.label} at {m.offset:#x}" for m in hits[:3]) + "; ") if hits else ""
-        rows.append((start, 3, f"{start:08X}  {end - start:>10,}  ?? UNEXPLAINED  {found}{signatures.describe(buf, start, end)}"))
+        listed = ", ".join(f"{m.signature.label} at {m.offset:#x}" for m in hits[:3])
+        found = f"contains {listed}; " if hits else ""
+        described = signatures.describe(buf, start, end)
+        rows.append((start, 3, f"{start:08X}  {end - start:>10,}  ?? UNEXPLAINED  {found}{described}"))
 
     rows.sort(key=lambda r: (r[0], r[1]))
     return [line for _, _, line in rows]
 
 
-def _value(buf, el, n_items: int, show_phi: bool) -> str:
+def _value(buf: Buffer, el: Element, n_items: int, show_phi: bool) -> str:
     if el.tag == ITEM:
         return ""
     if el.vr == "SQ":

@@ -32,5 +32,6 @@ _UNSAFE = re.compile(
 
 
 def safe(text: str) -> str:
-    return _UNSAFE.sub(lambda m: f"\\u{ord(m.group()):04x}" if ord(m.group()) > 0xFF
+    # No unsafe code point lies at 0xFF or 0x100, so the threshold has slack on both sides.
+    return _UNSAFE.sub(lambda m: f"\\u{ord(m.group()):04x}" if ord(m.group()) > 0xFF  # pragma: no mutate (equivalent)
                        else f"\\x{ord(m.group()):02x}", text)

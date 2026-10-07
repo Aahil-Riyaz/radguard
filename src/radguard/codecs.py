@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 import struct
 
-MAX_SEGMENTS = 100_000  # marker segments walked per frame
+MAX_SEGMENTS = 100_000  # marker segments walked per frame; pragma: no mutate (tuning)
 
 # After SOS, entropy-coded data runs until a real marker. In JPEG (ITU T.81 B.1.1.5)
 # FF 00 is a stuffed byte and FF D0-D7 are restart markers inside the scan; FF FF is fill.
@@ -45,6 +45,8 @@ def jpeg_end(data: bytes, *, ls: bool = False) -> tuple[int | None, str | None]:
         code, pos = data[fill_end.start()], fill_end.start() + 1
         if code == 0xD9:
             return pos, None
+        if code == 0x00:
+            return None, f"FF 00 at frame offset {pos - 2:#x} is not a marker outside entropy-coded data"
         if code in _STANDALONE:
             continue
         if code == 0xD8:

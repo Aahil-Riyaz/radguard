@@ -1,5 +1,7 @@
 """Codestream check: reassembled frames, their true ends, and what hides after them."""
 
+import struct
+
 from builder import JPEG_BASELINE, el, encapsulated, even, fake_pe, image, j2k, jpeg, part10, rle_frame
 from conftest import findings_for
 from radguard.findings import Severity
@@ -76,3 +78,22 @@ def test_padding_byte_after_eoi_is_legal():
 
 def test_unrelated_transfer_syntax_is_ignored():
     assert by_check(part10(image(8, 8) + el(0x00091010, "OB", jpeg()))) == {}
+
+
+def test_valid_offset_table_defines_frames():
+    # BOT says: frame 1 = fragments 1 and 2, frame 2 = fragment 3. Splitting on start markers alone
+    # would see three frames; the table is authoritative (PS3.5 A.4), so fragment 2 is a second image
+    # hidden inside frame 1, and no frame is undeclared.
+    a, b, c = (even(jpeg()) for _ in range(3))
+    bot = struct.pack("<2I", 0, (8 + len(a)) + (8 + len(b)))
+    data = part10(image(8, 8, frames=2, pixel_element=encapsulated(a, b, c, bot=bot)), ts=JPEG_BASELINE)
+    found = by_check(data)
+    assert "pixels.hidden-frames" not in found
+    assert found["pixels.codestream-trailing-data"].title == "Second image hidden after the end of a frame"
+
+
+def test_invalid_offset_table_is_not_trusted_for_framing():
+    a, b = even(jpeg()), even(jpeg())
+    data = part10(image(8, 8, frames=1, pixel_element=encapsulated(a, b, bot=struct.pack("<2I", 0, 3))),
+                  ts=JPEG_BASELINE)
+    assert "pixels.codestream-trailing-data" in by_check(data)  # fell back to the declared single frame

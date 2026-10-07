@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from radguard.dicom import dictionary, uids
 from radguard.dicom.model import (
     DEFLATE, HEADER, ITEM, ITEM_DELIM, MAGIC, PADDING, PIXEL_DATA, PREAMBLE, SEQ_DELIM,
-    TRAILING_PADDING, TRANSFER_SYNTAX, UNDEFINED, VALUE, Anomaly, Element, ParsedFile,
+    TRAILING_PADDING, TRANSFER_SYNTAX, UNDEFINED, VALUE, Anomaly, Buffer, Element, ParsedFile,
     Region, Syntax, tag_str,
 )
 
@@ -50,16 +50,16 @@ _ENCODINGS = {
 # Each nesting level costs three Python frames (dataset -> value -> sequence);
 # this ceiling keeps the deepest permitted parse far from the interpreter's
 # recursion limit, so no Limits value can turn into a RecursionError.
-MAX_DEPTH_CEILING = 128
+MAX_DEPTH_CEILING = 128  # pragma: no mutate (tuning)
 # Anomalies kept per code per file; the rest are counted and summarised.
 MAX_ANOMALIES_PER_CODE = 50
 
 
 @dataclass(frozen=True)
 class Limits:
-    max_depth: int = 32
-    max_elements: int = 1_000_000
-    max_inflated: int = 256 << 20
+    max_depth: int = 32  # pragma: no mutate (tuning)
+    max_elements: int = 1_000_000  # pragma: no mutate (tuning)
+    max_inflated: int = 256 << 20  # pragma: no mutate (tuning)
 
     def __post_init__(self) -> None:
         if not 1 <= self.max_depth <= MAX_DEPTH_CEILING:
@@ -71,51 +71,65 @@ class Limits:
 @dataclass
 class _Tally:
     """Anomaly counts shared by every parser working on one file."""
-    counts: Counter = field(default_factory=Counter)
+    counts: Counter[str] = field(default_factory=Counter)
     first_suppressed: dict[str, int] = field(default_factory=dict)
-    total: int = 0
+    total: int = 0  # pragma: no mutate (equivalent: only compared for equality)
 
 
 class _Desync(Exception):
     """Structure is lost; unwind to the nearest defined-length boundary."""
 
 
-def parse(buf, limits: Limits = Limits()) -> ParsedFile:
-    """Parse a Part 10 file. `buf` is bytes or a read-only mmap starting with preamble + DICM."""
+def parse(buf: Buffer, limits: Limits = Limits(), *, part10: bool = True) -> ParsedFile:
+    """Parse a DICOM file held in `buf` (bytes or a read-only mmap).
+
+    `part10` files start with the 128-byte preamble and "DICM". Otherwise `buf` is a
+    bare dataset, which strict readers reject but lenient ones (pydicom's force mode,
+    many toolkits) read anyway, so RadGuard must analyse it rather than skip it.
+    """
     tally = _Tally()
-    result = _parse(buf, limits, tally)
+    result = _parse(buf, limits, tally, part10)
     for code, offset in tally.first_suppressed.items():
         extra = tally.counts[code] - MAX_ANOMALIES_PER_CODE
         result.anomalies.append(Anomaly("suppressed", f"{extra:,} more '{code}' anomalies were not recorded", offset))
     return result
 
 
-def _parse(buf, limits: Limits, tally: _Tally) -> ParsedFile:
+def _parse(buf: Buffer, limits: Limits, tally: _Tally, part10: bool) -> ParsedFile:
     anomalies: list[Anomaly] = []
     elements: list[Element] = []
     p = _Parser(buf, limits, "file", anomalies, elements, tally)
-    p.region(0, PREAMBLE_LEN, PREAMBLE)
-    p.region(PREAMBLE_LEN, HEADER_LEN, MAGIC)
+    start = HEADER_LEN if part10 else 0
+    if part10:
+        p.region(0, PREAMBLE_LEN, PREAMBLE)
+        p.region(PREAMBLE_LEN, HEADER_LEN, MAGIC)
+    else:
+        p.note("no-part10-header", "the file has no 128-byte preamble or DICM marker; it is a bare dataset", 0)
 
     # File Meta Information: group 0002, always Explicit VR Little Endian (PS3.10 7.1).
     try:
-        pos, _ = p.dataset(HEADER_LEN, p.size, 0, None, False, True, only_group=0x0002)
+        pos, _ = p.dataset(start, p.size, 0, None, False, True, only_group=0x0002)
     except _Desync:
-        return ParsedFile(p.size, uids.lookup(None), HEADER_LEN, elements, anomalies, p.regions)
+        return ParsedFile(p.size, uids.lookup(None), start, elements, anomalies, p.regions, part10=part10)
 
-    if not any(el.tag == 0x00020000 for el in elements):
-        p.note("missing-meta-group-length",
-               "File Meta has no group length (0002,0000), which PS3.10 requires", HEADER_LEN)
     ts = p.transfer_syntax()
-    syntax = uids.lookup(ts)
-    if ts is None:
-        p.note("missing-transfer-syntax",
-               "File Meta has no Transfer Syntax UID (0002,0010); readers must guess the encoding", HEADER_LEN)
-    elif not syntax.known:
-        p.note("unknown-transfer-syntax", f"Transfer Syntax UID {ts!r} is not a standard transfer syntax",
-               HEADER_LEN, TRANSFER_SYNTAX)
+    if not part10 and pos == start:
+        # A bare dataset without File Meta declares nothing: infer the encoding.
+        implicit, little = p.detect(pos)
+        syntax = Syntax(None, f"{_ENCODINGS[(implicit, little)]} (inferred: no File Meta)", implicit, little)
+    else:
+        syntax = uids.lookup(ts)
+        if not any(el.tag == 0x00020000 for el in elements):
+            p.note("missing-meta-group-length",
+                   "File Meta has no group length (0002,0000), which PS3.10 requires", start)
+        if ts is None:
+            p.note("missing-transfer-syntax",
+                   "File Meta has no Transfer Syntax UID (0002,0010); readers must guess the encoding", start)
+        elif not syntax.known:
+            p.note("unknown-transfer-syntax", f"Transfer Syntax UID {ts!r} is not a standard transfer syntax",
+                   start, TRANSFER_SYNTAX)
 
-    result = ParsedFile(p.size, syntax, pos, elements, anomalies, p.regions)
+    result = ParsedFile(p.size, syntax, pos, elements, anomalies, p.regions, part10=part10)
     if pos >= p.size:
         return result
 
@@ -130,7 +144,7 @@ def _parse(buf, limits: Limits, tally: _Tally) -> ParsedFile:
             result.inflated, result.inflated_regions = data, inner.regions
         return result
 
-    implicit, little = p.sniff(pos, syntax)
+    implicit, little = p.sniff(pos, syntax)  # for an inferred encoding, sniff confirms it without an anomaly
     try:
         p.dataset(pos, p.size, 0, None, implicit, little)
     except _Desync:
@@ -139,7 +153,7 @@ def _parse(buf, limits: Limits, tally: _Tally) -> ParsedFile:
 
 
 class _Parser:
-    def __init__(self, buf, limits: Limits, domain: str, anomalies: list[Anomaly], elements: list[Element],
+    def __init__(self, buf: Buffer, limits: Limits, domain: str, anomalies: list[Anomaly], elements: list[Element],
                  tally: _Tally):
         self.tally = tally
         self.buf = buf
@@ -152,7 +166,7 @@ class _Parser:
 
     def note(self, code: str, message: str, offset: int, tag: int | None = None) -> None:
         tally = self.tally
-        tally.total += 1
+        tally.total += 1  # pragma: no mutate (equivalent: only compared for equality)
         tally.counts[code] += 1
         if tally.counts[code] > MAX_ANOMALIES_PER_CODE:
             tally.first_suppressed.setdefault(code, offset)
@@ -204,10 +218,12 @@ class _Parser:
                 *, in_item: bool = False, only_group: int | None = None) -> tuple[int, bool]:
         """Parse elements in [pos, end). Returns (position reached, closed by Item Delimitation Item)."""
         e = "<" if little else ">"
-        prev, seen = -1, set()
+        prev, seen = -1, set()  # pragma: no mutate (equivalent: any start below the first tag)
         glen = None  # (group, where its group length says it ends, offset of the length element)
         while pos < end:
-            if only_group is not None and (pos + 2 > end or struct.unpack_from(e + "H", self.buf, pos)[0] != only_group):
+            if only_group is not None and (
+                    pos + 2 > end  # pragma: no mutate (equivalent: the dataset parse reports the same truncation)
+                    or struct.unpack_from(e + "H", self.buf, pos)[0] != only_group):
                 break
             tag, vr, length, voff = self.header(pos, end, implicit, little)
             group = tag >> 16
@@ -231,7 +247,7 @@ class _Parser:
             self.admit(pos, tag)
             if tag in seen:
                 self.note("duplicate-tag", f"{tag_str(tag)} appears more than once in the same dataset", pos, tag)
-            elif tag < prev:
+            elif tag < prev:  # pragma: no mutate (equivalent: an equal tag is caught as a duplicate)
                 self.note("tag-order", f"{tag_str(tag)} comes after {tag_str(prev)}; tags must ascend", pos, tag)
             seen.add(tag)
             prev = max(prev, tag)
@@ -321,7 +337,8 @@ class _Parser:
                           pos, tag)
                 raise _Desync
             self.admit(pos, tag)
-            item = Element(ITEM, "", "structural", pos, pos + 8, length, pos + 8, depth, parent, little, self.domain)
+            start = pos + 8  # the item's content; its end is known once the content is parsed
+            item = Element(ITEM, "", "structural", pos, start, length, start, depth, parent, little, self.domain)
             item_idx = len(self.elements)
             self.elements.append(item)
             self.region(pos, pos + 8, HEADER)
@@ -350,9 +367,12 @@ class _Parser:
 
     def _starts_with_item(self, voff: int, vend: int) -> bool:
         if vend - voff < 8:
-            return False
+            return False  # pragma: no mutate (equivalent: the tentative parse rejects it)
         group, elem, length = struct.unpack_from("<HHI", self.buf, voff)
-        return group == 0xFFFE and elem == 0xE000 and (length == UNDEFINED or voff + 8 + length <= vend)
+        # A pre-filter only: the tentative parse validates everything again and rolls back.
+        is_item = group == 0xFFFE and elem == 0xE000  # pragma: no mutate (equivalent: pre-filter)
+        fits = length == UNDEFINED or voff + 8 + length <= vend  # pragma: no mutate (equivalent: pre-filter)
+        return bool(is_item and fits)  # pragma: no mutate (equivalent: pre-filter)
 
     def _tentative_sequence(self, el: Element, idx: int, vend: int, depth: int) -> None:
         """A value of unknown VR that starts with an Item tag is probably a sequence (encoded
@@ -363,7 +383,7 @@ class _Parser:
         try:
             ok = self._sequence(idx, el.value_offset, vend, depth + 1, True, True, undefined=False) == vend
         except _Desync:
-            ok = False
+            ok = False  # pragma: no mutate (equivalent: a desync always records an anomaly)
         if ok and tally.total == saved[0]:  # counts suppressed anomalies too
             el.vr, el.vr_source = "SQ", "inferred"
             return
@@ -384,7 +404,7 @@ class _Parser:
             if pos + 8 > end:
                 self.note("unterminated-pixel-data",
                           "encapsulated Pixel Data ends without a Sequence Delimitation Item", pos, el.tag)
-                if pos < end:
+                if pos < end:  # pragma: no mutate (equivalent: at the end, stopping and returning agree)
                     raise _Desync
                 return pos
             group, elem, length = struct.unpack_from(fmt, self.buf, pos)
@@ -431,9 +451,11 @@ class _Parser:
         # Offsets are relative to the first byte of the first fragment's Item tag (PS3.5 A.4).
         valid = {offset - end for offset in item_offsets}
         bad = sum(offset not in valid for offset in offsets)
-        if bad or list(offsets) != sorted(offsets):
+        if bad or list(offsets) != sorted(offsets) or offsets[0] != 0:
             self.note("bad-offset-table", f"{bad} of {n} Basic Offset Table entries do not point at a fragment",
                       start, el.tag)
+        else:
+            el.offset_table = list(offsets)  # only a table that checks out is allowed to define frames
 
     # -- consistency checks ---------------------------------------------------------
 
@@ -476,6 +498,15 @@ class _Parser:
                 return alt
         return declared
 
+    def detect(self, pos: int) -> tuple[bool, bool]:
+        """Encoding of a dataset that declares none. Valid VR bytes are strong evidence, so both
+        explicit encodings are tried first; otherwise implicit VR little endian, the historical
+        default (ACR-NEMA and the DICOM default transfer syntax), plausible or not."""
+        for encoding in ((False, True), (False, False)):
+            if self._plausible(pos, *encoding):
+                return encoding
+        return True, True
+
     def _plausible(self, pos: int, implicit: bool, little: bool) -> bool:
         if pos + 8 > self.size:
             return False
@@ -485,7 +516,7 @@ class _Parser:
             return False
         if implicit:
             (length,) = struct.unpack_from(e + "I", self.buf, pos + 4)
-            return length == UNDEFINED or pos + 8 + length <= self.size
+            return bool(length == UNDEFINED or pos + 8 + length <= self.size)
         vr = bytes(self.buf[pos + 4 : pos + 6])
         if vr not in _VALID_VRS:
             return False
@@ -493,9 +524,9 @@ class _Parser:
             if pos + 12 > self.size:
                 return False
             (length,) = struct.unpack_from(e + "I", self.buf, pos + 8)
-            return length == UNDEFINED or pos + 12 + length <= self.size
+            return bool(length == UNDEFINED or pos + 12 + length <= self.size)
         (length,) = struct.unpack_from(e + "H", self.buf, pos + 6)
-        return pos + 8 + length <= self.size
+        return bool(pos + 8 + length <= self.size)
 
     def _clearly_explicit(self, pos: int) -> bool:
         """Implicit data whose 'length' bytes spell the dictionary VR of the tag is really explicit."""
@@ -523,3 +554,31 @@ class _Parser:
             # Anything after the end of the deflate stream is left unexplained on purpose.
             self.region(pos, self.size - len(d.unused_data), DEFLATE)
         return data
+
+
+def looks_like_dataset(buf: Buffer) -> bool:
+    """Is `buf` a DICOM dataset without a Part 10 header?
+
+    Strict enough that ordinary files never qualify: the first element must belong
+    to group 0002 or 0008 (where every real dataset starts) and the first three
+    top-level elements must parse cleanly in ascending order. Random data passes
+    with a probability far below one in a billion.
+    """
+    head = bytes(buf[:4096])  # pragma: no mutate (tuning)
+    for implicit, little in ((False, True), (True, True), (False, False)):
+        if len(head) < 8 or struct.unpack_from("<H" if little else ">H", head, 0)[0] not in (0x0002, 0x0008):
+            continue
+        anomalies: list[Anomaly] = []
+        elements: list[Element] = []
+        # The trial parse is the test: a wrong encoding fails on the first element.
+        trial = _Parser(head, Limits(max_elements=64),  # pragma: no mutate (tuning)
+                        "file", anomalies, elements, _Tally())
+        try:
+            trial.dataset(0, len(head), 0, None, implicit, little)
+        except _Desync:
+            pass
+        first_problem = min((a.offset for a in anomalies), default=len(head))
+        clean = [el for el in elements if el.depth == 0 and el.end <= first_problem]
+        if len(clean) >= 3 or (clean and clean[-1].end == len(buf)):
+            return True
+    return False

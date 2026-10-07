@@ -20,10 +20,12 @@ import struct
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TypeAlias
 
+from radguard.dicom.model import Buffer
 from radguard.findings import Severity
 
-Validator = Callable[[object, int], "str | None"]  # (buffer, offset) -> detail, or None to reject
+Validator: TypeAlias = Callable[[Buffer, int], "str | None"]  # (buffer, offset) -> detail, or None to reject
 
 
 @dataclass(frozen=True)
@@ -43,7 +45,7 @@ class Match:
     detail: str = ""
 
 
-def printable(data: bytes, limit: int = 40) -> str:
+def printable(data: bytes, limit: int = 40) -> str:  # pragma: no mutate (display)
     """ASCII-only rendering of attacker-controlled bytes, safe to embed in a finding."""
     text = "".join(chr(b) if 0x20 <= b < 0x7F else "." for b in data[:limit])
     return text + ("..." if len(data) > limit else "")
@@ -51,18 +53,19 @@ def printable(data: bytes, limit: int = 40) -> str:
 
 # -- validators ----------------------------------------------------------------
 
-def pe_header(buf, mz_offset: int) -> int | None:
+def pe_header(buf: Buffer, mz_offset: int) -> int | None:
     """Offset of the "PE\\0\\0" header that the MZ stub at `mz_offset` points to, if valid."""
-    if mz_offset + 0x40 > len(buf):
+    # The DOS header is 0x40 bytes and a real PE header always lies beyond it.
+    if mz_offset + 0x40 > len(buf):  # pragma: no mutate (equivalent: a valid PE is always longer)
         return None
-    (e_lfanew,) = struct.unpack_from("<I", buf, mz_offset + 0x3C)
-    pe = mz_offset + e_lfanew
-    if 0 < e_lfanew and pe + 4 <= len(buf) and buf[pe : pe + 4] == b"PE\x00\x00":
+    e_lfanew: int = struct.unpack_from("<I", buf, mz_offset + 0x3C)[0]
+    pe = mz_offset + e_lfanew  # e_lfanew = 0 points back at "MZ", which the comparison below rejects
+    if buf[pe : pe + 4] == b"PE\x00\x00":  # a slice past the end is just shorter, never a match
         return pe
     return None
 
 
-def _pe(buf, pos):
+def _pe(buf: Buffer, pos: int) -> str | None:
     pe = pe_header(buf, pos)
     return f"PE header at {pe:#x}" if pe is not None else None
 
@@ -70,7 +73,7 @@ def _pe(buf, pos):
 _ELF_TYPES = {1: "relocatable object", 2: "executable", 3: "shared object", 4: "core dump"}
 
 
-def _elf(buf, pos):
+def _elf(buf: Buffer, pos: int) -> str | None:
     if pos + 18 > len(buf):
         return None
     cls, data, version = buf[pos + 4], buf[pos + 5], buf[pos + 6]
@@ -85,7 +88,7 @@ def _elf(buf, pos):
 _MACHO_CPUS = {7: "x86", 0x01000007: "x86_64", 12: "ARM", 0x0100000C: "ARM64", 18: "PowerPC", 0x01000012: "PowerPC64"}
 
 
-def _macho(buf, pos):
+def _macho(buf: Buffer, pos: int) -> str | None:
     if pos + 8 > len(buf):
         return None
     little = buf[pos] in (0xCE, 0xCF)
@@ -93,7 +96,7 @@ def _macho(buf, pos):
     return _MACHO_CPUS.get(cpu)
 
 
-def _fat_or_class(buf, pos):
+def _fat_or_class(buf: Buffer, pos: int) -> str | None:
     if pos + 8 > len(buf):
         return None
     first, second = struct.unpack_from(">HH", buf, pos + 4)
@@ -103,18 +106,19 @@ def _fat_or_class(buf, pos):
     return f"universal binary with {count} architectures" if 1 <= count <= 32 else None
 
 
+SHEBANG_WINDOW = 160  # pragma: no mutate (equivalent: window > longest interpreter line)
 _INTERPRETER = re.compile(rb"#!(/[\w./-]{2,64})[ \t]*[\w./ -]{0,64}\r?\n")
 
 
-def _shebang(buf, pos):
-    m = _INTERPRETER.match(bytes(buf[pos : pos + 160]))
+def _shebang(buf: Buffer, pos: int) -> str | None:
+    m = _INTERPRETER.match(bytes(buf[pos : pos + SHEBANG_WINDOW]))
     return f"interpreter {printable(m.group(1))}" if m else None
 
 
 _ZIP_METHODS = {0, 8, 9, 12, 14, 93, 95, 98, 99}
 
 
-def _zip(buf, pos):
+def _zip(buf: Buffer, pos: int) -> str | None:
     if pos + 30 > len(buf):
         return None
     version, _, method = struct.unpack_from("<HHH", buf, pos + 4)
@@ -124,16 +128,16 @@ def _zip(buf, pos):
     return f"first entry {printable(bytes(buf[pos + 30 : pos + 30 + name_len]))}"
 
 
-def _ole(buf, pos):
+def _ole(buf: Buffer, pos: int) -> str | None:
     return "" if buf[pos + 28 : pos + 30] == b"\xfe\xff" else None  # byte-order mark
 
 
-def _pdf(buf, pos):
+def _pdf(buf: Buffer, pos: int) -> str | None:
     version = bytes(buf[pos + 5 : pos + 8])
     return f"PDF {version.decode()}" if re.fullmatch(rb"\d\.\d", version) else None
 
 
-def _rtf(buf, pos):
+def _rtf(buf: Buffer, pos: int) -> str | None:
     return "" if pos + 6 <= len(buf) and (chr(buf[pos + 5]).isalnum() or buf[pos + 5] == 0x5C) else None
 
 
@@ -165,9 +169,9 @@ SIGNATURES: tuple[Signature, ...] = (
 )
 
 
-def match_prefix(buf, start: int, end: int) -> Match | None:
+def match_prefix(buf: Buffer, start: int, end: int) -> Match | None:
     """Identify a format whose magic sits exactly at `start` (no confirmation required)."""
-    head = bytes(buf[start : min(end, start + 64)])
+    head = bytes(buf[start : min(end, start + 64)])  # pragma: no mutate (equivalent: window > longest magic)
     for sig in SIGNATURES:
         if sig.kind == "markup":
             if head.lstrip(b" \t\r\n").lower().startswith(sig.magics):
@@ -189,12 +193,12 @@ def entropy(data: bytes) -> float:
     return -sum(c / n * math.log2(c / n) for c in Counter(data).values())
 
 
-def describe(buf, start: int, end: int, sample: int = 4096) -> str:
+def describe(buf: Buffer, start: int, end: int, sample: int = 4096) -> str:  # pragma: no mutate (display)
     data = bytes(buf[start : min(end, start + sample)])
     if not data:
         return "empty"
-    share = sum(32 <= b < 127 for b in data) / len(data)
-    scope = f" over the first {sample:,} bytes" if end - start > sample else ""
+    share = sum(32 <= b < 127 for b in data) / len(data)  # pragma: no mutate (display)
+    scope = f" over the first {sample:,} bytes" if end - start > sample else ""  # pragma: no mutate (display)
     return (
         f"first bytes {data[:16].hex(' ')}; "
         f"entropy {entropy(data):.2f} bits/byte{scope}; {share:.0%} printable"

@@ -16,11 +16,13 @@ from radguard import signatures
 from radguard.carving import MatchIndex
 from radguard.context import FileContext
 from radguard.dicom import values
-from radguard.dicom.model import DOUBLE_PIXEL_DATA, FLOAT_PIXEL_DATA, PIXEL_DATA, Element, ParsedFile
+from radguard.dicom.model import DOUBLE_PIXEL_DATA, FLOAT_PIXEL_DATA, PIXEL_DATA, Buffer, Element, ParsedFile
 from radguard.findings import Finding, Severity
 
 SAMPLES_PER_PIXEL, NUMBER_OF_FRAMES = 0x00280002, 0x00280008
 ROWS, COLUMNS, BITS_ALLOCATED = 0x00280010, 0x00280011, 0x00280100
+_GEOMETRY = {ROWS: "Rows", COLUMNS: "Columns", SAMPLES_PER_PIXEL: "Samples per Pixel",
+             NUMBER_OF_FRAMES: "Number of Frames", BITS_ALLOCATED: "Bits Allocated"}
 
 
 def check(ctx: FileContext) -> Iterator[Finding]:
@@ -52,6 +54,17 @@ def check(ctx: FileContext) -> Iterator[Finding]:
     if not pixels:
         return
 
+    for tag, name in _GEOMETRY.items():
+        copies = top.get(tag, [])
+        seen = [values.number(buf, el) for el in copies]
+        if len(set(seen)) > 1:
+            yield Finding(
+                "pixels.ambiguous-geometry", Severity.HIGH, f"Conflicting {name} values",
+                f"{name} appears {len(copies)} times with different values ({', '.join(map(str, seen))}); readers "
+                "that keep the first copy and readers that keep the last decode the same pixel bytes with different "
+                "dimensions. Size checks below use the first", ctx.path, copies[1].offset,
+            )
+
     def first(tag: int) -> int | None:
         return values.number(buf, top[tag][0]) if top.get(tag) else None
 
@@ -61,8 +74,9 @@ def check(ctx: FileContext) -> Iterator[Finding]:
         yield from _check_pixel_data(ctx.path, buf, parsed, ctx.matches(domain), px, *geometry)
 
 
-def _check_pixel_data(path: str, buf, parsed: ParsedFile, index: MatchIndex, px: Element,
-                      rows, cols, samples: int, frames: int, bits) -> Iterator[Finding]:
+def _check_pixel_data(path: str, buf: Buffer, parsed: ParsedFile, index: MatchIndex, px: Element,
+                      rows: int | None, cols: int | None, samples: int, frames: int,
+                      bits: int | None) -> Iterator[Finding]:
     if px.undefined != parsed.syntax.encapsulated:
         expected_form = "encapsulated" if parsed.syntax.encapsulated else "native"
         actual_form = "encapsulated" if px.undefined else "native"
@@ -97,12 +111,12 @@ def _check_pixel_data(path: str, buf, parsed: ParsedFile, index: MatchIndex, px:
     inside = index.within(px.value_offset, px.value_offset + min(actual, padded))
     if inside:
         # Validated signatures make chance matches in real pixel data vanishingly rare.
+        listed = ", ".join(signatures.match_text(m) for m in inside[:5])  # pragma: no mutate (display)
         yield Finding(
             "pixels.embedded-file", max(m.signature.severity for m in inside),
             f"{inside[0].signature.label} stored as image pixels",
-            "the declared image area contains " + ", ".join(signatures.match_text(m) for m in inside[:5])
-            + "; viewers render it as noise, and nothing that only displays images will notice",
-            path, inside[0].offset,
+            f"the declared image area contains {listed}; viewers render it as noise, and nothing that only "
+            "displays images will notice", path, inside[0].offset,
         )
     if actual < expected:
         yield Finding(
@@ -115,7 +129,7 @@ def _check_pixel_data(path: str, buf, parsed: ParsedFile, index: MatchIndex, px:
         frame_bytes = expected // frames
         hidden_frames = n // frame_bytes if frame_bytes else 0
         hits = index.within(start, px.end)
-        sample = bytes(buf[start : start + min(n, 4096)])
+        sample = bytes(buf[start : start + min(n, 4096)])  # pragma: no mutate (tuning)
         if hits:
             severity = max(Severity.HIGH, *(m.signature.severity for m in hits))
         elif hidden_frames or n >= 4096 or (n >= 256 and signatures.entropy(sample) > 7.0):
@@ -126,7 +140,8 @@ def _check_pixel_data(path: str, buf, parsed: ParsedFile, index: MatchIndex, px:
                   f"{start:#x} are outside the image the header describes: viewers that honour the header "
                   "never display them, while lenient decoders return them as extra frames")
         if hits:
-            detail += "; contains " + ", ".join(signatures.match_text(m) for m in hits[:5])
+            listed = ", ".join(signatures.match_text(m) for m in hits[:5])  # pragma: no mutate (display)
+            detail += f"; contains {listed}"
         detail += "; " + signatures.describe(buf, start, px.end)
         title = (f"{hidden_frames} hidden frame(s) after the declared image" if hidden_frames
                  else f"{n:,} bytes hidden after the last pixel")
