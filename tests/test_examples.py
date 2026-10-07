@@ -1,6 +1,8 @@
 """The committed examples, and the README claims built on them, must stay true."""
 
 import importlib.util
+import struct
+import zlib
 from pathlib import Path
 
 import pytest
@@ -41,4 +43,22 @@ def test_examples_and_figure_are_reproducible(tmp_path):
     module.main(out=tmp_path / "examples", fig=tmp_path / "figure.png")
     for name in EXPECTED:
         assert (tmp_path / "examples" / name).read_bytes() == (EXAMPLES / name).read_bytes(), name
-    assert (tmp_path / "figure.png").read_bytes() == (ROOT / "docs" / "img" / "two-scans-one-file.png").read_bytes()
+    # Compare decoded pixels, not compressed bytes: zlib builds (classic zlib, zlib-ng) emit
+    # different but equally valid deflate streams for the same image.
+    regenerated = png_image((tmp_path / "figure.png").read_bytes())
+    assert regenerated == png_image((ROOT / "docs" / "img" / "two-scans-one-file.png").read_bytes())
+
+
+def png_image(data: bytes) -> tuple[bytes, bytes]:
+    """The IHDR (dimensions and format) and the decompressed scanlines of a PNG."""
+    assert data.startswith(b"\x89PNG\r\n\x1a\n")
+    pos, header, idat = 8, b"", b""
+    while pos < len(data):
+        (length,), kind = struct.unpack_from(">I", data, pos), data[pos + 4 : pos + 8]
+        body = data[pos + 8 : pos + 8 + length]
+        if kind == b"IHDR":
+            header = body
+        elif kind == b"IDAT":
+            idat += body
+        pos += 12 + length
+    return header, zlib.decompress(idat)
