@@ -1,5 +1,7 @@
 # RadGuard
 
+[![ci](https://github.com/Aahil-Riyaz/radguard/actions/workflows/ci.yml/badge.svg)](https://github.com/Aahil-Riyaz/radguard/actions/workflows/ci.yml)
+
 **An integrity and safety scanner for medical imaging.** RadGuard opens DICOM files (CT, MRI, X-ray) and checks three things hospitals currently have no unified way to check:
 
 1. **Hidden malware.** A scan that is also an executable, or carries one.
