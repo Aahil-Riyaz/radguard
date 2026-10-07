@@ -67,6 +67,7 @@ def test_unreadable_directory_is_reported_not_skipped(tmp_path, monkeypatch):
     results = list(scanner.scan_paths([str(tmp_path)]))
     [error] = [r for r in results if r.error]
     assert error.path == str(locked) and "cannot list directory" in error.error
+    assert error.is_dicom is False
     assert [r.is_dicom for r in results if not r.error] == [True]
 
 

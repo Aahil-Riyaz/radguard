@@ -46,12 +46,12 @@ After the fix the same file produces `structure.no-part10-header` and a critical
 
 | Metric | Before | After |
 |---|---|---|
-| Tests | 190 | 592 (589 run on Windows; 3 need POSIX features and run in Linux CI) |
+| Tests | 190 | 615 (612 run on Windows; 3 need POSIX features and run in Linux CI) |
 | Branch coverage | 94% | 98% (the remainder is mostly race-condition branches that cannot be produced deterministically) |
 | `mypy --strict` errors | 44 | 0 |
 | Anomaly rules with a test that triggers them | not measured | 33 / 33 (enforced by a completeness test) |
 | Example files whose documented findings are pinned | 0 | 5 / 5, plus byte-for-byte reproducibility of examples and figure |
-| Mutation score | not measured | 98.2% (905 of 922 mutants killed; 63 lines exempt, each with a stated reason) |
+| Mutation score | not measured | 100% (918 of 918 mutants killed; 63 lines exempt, each with a stated reason) |
 
 ## Mutation testing results
 
@@ -84,7 +84,9 @@ Per module, run 3:
 - **Missing exact-edge tests** for the output sanitiser's ranges, carving budgets, every signature validator field, codec segment limits, slack and gap severity thresholds, and the parser's plausibility checks.
 - **Equivalent mutants**, which are exempted with `# pragma: no mutate (reason)`: tuning constants, display truncation, optimisation pre-filters whose work is repeated by a later step, and counters that are only compared for equality.
 
-**Still open (17 survivors after run 3):** two have since been resolved by code changes (an Item's start offset now comes from one variable; encoding detection now tries both explicit forms before falling back to implicit). The rest each need one small edge test, identified individually: `(gggg,0100)` is not a creator, `(gggg,1000)` is the first data element, a long-VR header of exactly 12 bytes, a Basic Offset Table at an odd file offset, big-endian bare-dataset detection, pixel checks on a deflated dataset, exact anomaly lists after an item overflow and after unterminated pixel data, and `is_dicom` on directory errors.
+**Closing the last 17 survivors.** Two were resolved by code changes: an Item's start offset now comes from one variable, and encoding detection tries both explicit forms (whose VR bytes are strong evidence) before falling back to implicit VR. The rest got one edge test each: `(gggg,0100)` is not a creator, `(gggg,1000)` is the first data element, a long-VR header of exactly 12 bytes, a Basic Offset Table at an odd file offset, big-endian bare-dataset detection, pixel checks inside a deflated dataset, exact anomaly lists after an item overflow and after unterminated pixel data, and `is_dicom` on directory errors. A targeted run 4 over the four affected modules killed 474 of 475. The last survivor (a sequence delimiter's region claiming 9 bytes instead of 8, overlapping the next element by one byte) is killed by a test that regions never overlap after a delimiter, verified by applying that exact mutant.
+
+**Final: 918 of 918 mutants killed (100%)** across 14 modules, with 63 lines exempt as equivalent mutants, each with its reason in the source.
 
 ## Process notes
 

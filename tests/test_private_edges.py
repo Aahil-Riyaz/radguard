@@ -108,7 +108,7 @@ def test_private_creators_are_collected_per_block():
 
 @pytest.mark.parametrize("tag,name", [
     (0x00291010, "Private [ACME]"), (0x0029FF01, "Private [LAST]"), (0x00291110, "Private [no creator]"),
-    (0x00290FFF, "Private"), (0x00281050, "WindowCenter"),
+    (0x00290FFF, "Private"), (0x00291000, "Private [ACME]"), (0x00281050, "WindowCenter"),
 ])
 def test_names_include_the_owning_creator(tag, name):
     blob = part10(creator(0x0029, 0x10, "ACME") + creator(0x0029, 0xFF, "LAST") + el(tag, "OB", b"xx"))

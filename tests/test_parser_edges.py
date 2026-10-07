@@ -45,7 +45,9 @@ def test_every_stop_leaves_the_remainder_unexplained(code, data, kwargs):
 
 def test_unterminated_pixel_data_with_leftover_bytes_stops():
     data = part10(el(PIXEL_DATA, "OB", item(b"") + item(b"ab") + b"xyz", length=UNDEF), ts=JPEG_BASELINE)
-    assert coverage.gaps(parse(data).regions, len(data)) == [(len(data) - 3, len(data))]
+    parsed = parse(data)
+    assert coverage.gaps(parsed.regions, len(data)) == [(len(data) - 3, len(data))]
+    assert [a.code for a in parsed.anomalies] == ["unterminated-pixel-data"]
 
 
 def test_stray_delimiter_stops_even_before_valid_data():
@@ -156,7 +158,9 @@ def test_bare_big_endian_dataset_is_detected():
 
 
 def test_bare_dataset_with_no_plausible_encoding_defaults_to_implicit():
-    assert parse(b"\x08\x00\x10\x00" + b"\xff" * 20, part10=False).syntax.implicit is True
+    # Implicit length 0xFFFFFF00 does not fit and is not "undefined"; the VR bytes 00 FF are no VR.
+    syntax = parse(b"\x08\x00\x10\x00\x00\xff\xff\xff" + bytes(16), part10=False).syntax
+    assert (syntax.implicit, syntax.little) == (True, True)
 
 
 ELEMENTS = el(0x00080005, "CS", "ISO_IR 100") + el(0x00080016, "UI", "1.2") + el(0x00080060, "CS", "CT")
@@ -248,3 +252,48 @@ def test_plausibility_needs_eight_bytes_and_a_dataset_group():
 
 def test_explicit_vr_sequence_is_parsed_after_sniffing():
     assert codes(part10(seq(0x00081140, item(el(0x00100010, "PN", "X"))), ts=EXPLICIT_LE)) == []
+
+
+# -- round 3: the last surviving mutants -------------------------------------------------------------
+
+def test_item_overflow_stops_at_the_overflow():
+    data = part10(el(0x00081140, "SQ", struct.pack("<HHI", 0xFFFE, 0xE000, 999) + b"abcd"))
+    assert codes(data) == ["length-overflow"]
+
+
+def test_long_vr_header_of_exactly_twelve_bytes_is_complete():
+    assert "truncated-header" not in codes(part10() + el(0x00091010, "OB", b""))
+
+
+def test_item_content_starts_right_after_its_header():
+    data = part10(seq(0x00081140, item(el(0x00100010, "PN", "X"))))
+    it = next(e for e in parse(data).elements if e.tag == ITEM)
+    child = next(e for e in parse(data).elements if e.tag == 0x00100010)
+    assert child.offset == it.value_offset == it.offset + 8
+
+
+def test_inflated_dataset_is_the_top_level():
+    from conftest import findings_for
+
+    data = part10(deflate(image(4, 4, bytes(16) + b"slack!")), ts=DEFLATED_LE)
+    assert {e.depth for e in parse(data).elements if e.domain == "inflated"} == {0}
+    assert "pixels.slack" in {f.check for f in findings_for(data, "pixels.")}
+
+
+@pytest.mark.parametrize("prefix", [b"x", b"xy"], ids=["odd-shift", "even-shift"])
+def test_offset_table_length_check_ignores_where_the_table_sits(prefix):
+    # One of the two prefixes puts the table at an odd file offset.
+    data = part10(el(0x00091010, "OB", prefix) + encapsulated(b"ab", bot=struct.pack("<I", 0)), ts=JPEG_BASELINE)
+    assert "bad-offset-table" not in codes(data)
+
+
+def test_bare_big_endian_dataset_is_recognised():
+    assert looks_like_dataset(image(4, 4, little=False))
+
+
+def test_regions_never_overlap_after_a_sequence_delimiter():
+    data = part10(seq(0x00081140, item(el(0x00100010, "PN", "X")), undefined=True) + el(0x00100020, "LO", "ID"))
+    regions = sorted(parse(data).regions)
+    assert all(end <= start for (_, end, _), (start, _, _) in zip(regions, regions[1:]))
+    delimiter = data.index(struct.pack("<HHI", 0xFFFE, 0xE0DD, 0))
+    assert (delimiter, delimiter + 8, "header") in regions

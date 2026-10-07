@@ -53,7 +53,7 @@ def test_forbidden_private_groups(group):
     assert "private.illegal-group" in by_check(blob)
 
 
-@pytest.mark.parametrize("elem", [0x0005, 0x0500])
+@pytest.mark.parametrize("elem", [0x0005, 0x0100, 0x0500])
 def test_elements_outside_any_block(elem):
     assert "private.unusable-element" in by_check(part10(el(0x0029 << 16 | elem, "OB", b"xx")))
 

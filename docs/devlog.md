@@ -65,14 +65,14 @@ Next (Day 4): private-tag analysis (creator blocks, oversized and high-entropy p
 
 - **Fail-open bugs, fixed.** A scan that could not read some files still exited 0, so CI gates passed unscanned files. Unreadable directories vanished silently (`os.walk` ignores errors by default). DICOM data without the 128-byte header was skipped as "not DICOM", although pydicom reads it in force mode: reproduced with a header-less file ending in an executable, which RadGuard reported as clean. Now exit status 3 means "scan incomplete" and takes precedence over findings, directory errors are reported, and bare datasets are analysed.
 - **Strict typing:** 44 `mypy --strict` errors to 0. The root cause was a missing type for the buffer every check reads (`bytes` for small files, `mmap` for large ones). Enforced in CI with a 90% coverage floor.
-- **Mutation testing.** Built `scripts/mutation_test.py`, which makes one small change at a time and runs the suite against each. The first run gave the parser a fake 100% because one test depended on source formatting; the harness now checks itself before mutating and refuses to run if that happens. Real score went from 80.0% to **98.2%**, and the survivors exposed a real off-by-one in carving, dead code, and a test that compared a constant with itself.
+- **Mutation testing.** Built `scripts/mutation_test.py`, which makes one small change at a time and runs the suite against each. The first run gave the parser a fake 100% because one test depended on source formatting; the harness now checks itself before mutating and refuses to run if that happens. Real score went from 80.0% to **100%** (918 of 918), and the survivors exposed a real off-by-one in carving, dead code, and a test that compared a constant with itself.
 
 **Private-data analysis.** Vendor blocks are checked against PS3.5 7.8 (orphan data, forbidden groups, malformed or duplicate creators), high-entropy blobs of unknown format are flagged, and zlib/gzip private values are **decompressed under strict budgets and searched**, because compression hides an executable from any signature search. Design: [design/private-data.md](design/private-data.md).
 
 **Security review of my own first draft found three holes (RG-10 to RG-12):** `zlib` treats `max_length=0` as *unlimited*, so an exhausted budget would have inflated the next value without any cap; two bytes of fake zlib header let encrypted data skip the entropy check; and bytes after a valid compressed stream were never examined.
 
-**Numbers:** 592 tests, 98% branch coverage, 98.2% mutation score, mypy strict clean.
+**Numbers:** 615 tests, 98% branch coverage, 100% mutation score (918/918), mypy strict clean.
 
 **Learned:** a metric is only as honest as the tool measuring it. The mutation tester produced a convincing 100% that was entirely fake, and the fix was to make the tool verify its own preconditions before reporting anything.
 
-Next: kill the last mutation survivors (each already identified), then SARIF output.
+Next (Day 5): SARIF output, so findings land in GitHub code scanning and SIEMs.
