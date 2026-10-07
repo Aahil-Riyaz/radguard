@@ -19,11 +19,11 @@ from collections.abc import Iterator
 from radguard import codecs, signatures
 from radguard.context import FileContext
 from radguard.dicom import values
-from radguard.dicom.model import PIXEL_DATA, Element
+from radguard.dicom.model import PIXEL_DATA, Buffer, Element
 from radguard.findings import Finding, Severity
 
 NUMBER_OF_FRAMES = 0x00280008
-MAX_FRAME_BYTES = 256 << 20  # reassembled per file; the rest is reported as not inspected
+MAX_FRAME_BYTES = 256 << 20  # reassembled per file; the rest is reported as not inspected; pragma: no mutate (tuning)
 
 _JPEG = ("1.2.840.10008.1.2.4.50", "1.2.840.10008.1.2.4.51", "1.2.840.10008.1.2.4.57", "1.2.840.10008.1.2.4.70")
 _JPEG_LS = ("1.2.840.10008.1.2.4.80", "1.2.840.10008.1.2.4.81")
@@ -49,8 +49,8 @@ def check(ctx: FileContext) -> Iterator[Finding]:
     pixels = [px for px in top.get(PIXEL_DATA, []) if px.fragments is not None]
     if codec is None or not pixels:
         return
-    declared = values.number(buf, top[NUMBER_OF_FRAMES][0]) if top.get(NUMBER_OF_FRAMES) else 1
-    declared = declared if declared and declared > 0 else 1
+    number = values.number(buf, top[NUMBER_OF_FRAMES][0]) if top.get(NUMBER_OF_FRAMES) else None
+    declared = max(1, number or 1)  # absent, zero or negative all mean one frame
 
     budget = MAX_FRAME_BYTES
     for px in pixels:
@@ -73,27 +73,38 @@ def check(ctx: FileContext) -> Iterator[Finding]:
             yield from _frame(ctx, buf, domain, codec, number, frags)
 
 
-def _frames(buf, px: Element, codec: str, declared: int) -> list[list[tuple[int, int]]]:
+def _frames(buf: Buffer, px: Element, codec: str, declared: int) -> list[list[tuple[int, int]]]:
     """Group fragments into frames the way decoders do (PS3.5 A.4)."""
     frags = px.fragments
     if not frags:
         return []
-    if len(frags) == declared:
+    magic = _FRAME_START.get(codec, b"")
+    if px.offset_table:
+        # A valid Basic Offset Table is authoritative: each entry is the start of a frame,
+        # relative to the first fragment's Item tag (8 bytes before its value).
+        first_item, starts = frags[0][0] - 8, set(px.offset_table)
+
+        def begins(offset: int) -> bool:
+            return offset - 8 - first_item in starts
+    elif len(frags) == declared:
         return [[f] for f in frags]
-    if declared == 1:
+    elif declared == 1:
         return [frags]
-    start = _FRAME_START.get(codec)
-    if start is None:
+    elif not magic:  # no start marker to split on (RLE): one fragment per frame, as decoders assume
         return [[f] for f in frags]
+    else:
+        def begins(offset: int) -> bool:  # no table: a frame starts where the codec's start marker is
+            return bytes(buf[offset : offset + len(magic)]) == magic
+
     frames: list[list[tuple[int, int]]] = []
     for offset, length in frags:
-        if not frames or bytes(buf[offset : offset + len(start)]) == start:
+        if not frames or begins(offset):
             frames.append([])
         frames[-1].append((offset, length))
     return frames
 
 
-def _frame(ctx: FileContext, buf, domain: str, codec: str, number: int,
+def _frame(ctx: FileContext, buf: Buffer, domain: str, codec: str, number: int,
            frags: list[tuple[int, int]]) -> Iterator[Finding]:
     data = b"".join(bytes(buf[o : o + n]) for o, n in frags)
     first = frags[0][0]
@@ -136,8 +147,8 @@ def _frame(ctx: FileContext, buf, domain: str, codec: str, number: int,
     if image_at is not None:
         detail += f"; a second image starts {image_at:,} bytes after the end"
     if hits:
-        detail += "; contains " + ", ".join(signatures.match_text(m) for m in hits[:5])
-    detail += "; " + signatures.describe(trailing, 0, len(trailing))
+        detail += "; contains " + ", ".join(signatures.match_text(m) for m in hits[:5])  # pragma: no mutate (display)
+    detail += "; " + signatures.describe(trailing, 0, len(trailing))  # pragma: no mutate (display)
     title = ("Second image hidden after the end of a frame" if image_at is not None and not hits
              else f"{len(trailing):,} bytes hidden after the end of a compressed frame")
     yield Finding("pixels.codestream-trailing-data", severity, title, detail, ctx.path, start)
@@ -148,4 +159,4 @@ def _file_offset(frags: list[tuple[int, int]], relative: int) -> int:
         if relative < length:
             return offset + relative
         relative -= length
-    return frags[-1][0] + frags[-1][1]
+    raise AssertionError("offset beyond the frame")  # pragma: no mutate (unreachable: trailing data is non-empty)

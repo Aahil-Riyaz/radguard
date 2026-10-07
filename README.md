@@ -71,6 +71,8 @@ The most dangerous files aren't malformed, just *ambiguous*: different software 
 
 ## What it detects today
 
+- **Bare datasets:** DICOM data with no 128-byte header or `DICM` marker is analysed, not skipped: lenient readers (pydicom's force mode, many toolkits) open it, so a scanner that only looks for the marker has a blind spot
+- **Private data:** vendor blocks checked against the reservation rules (orphan data, forbidden groups, broken or duplicate creators), high-entropy blobs of unknown format, and **zlib/gzip private values decompressed under strict budgets and searched**, because compression hides an executable from any signature search ([design](docs/design/private-data.md))
 - **Preamble polyglots:** PE (with `e_lfanew` followed to a real PE header), ELF, Mach-O, scripts, ZIP/JAR, OLE/MSI, PDF, HTML/SVG
 - **Hidden payloads:** executables and archives in bytes outside the DICOM structure, after a deflate stream, or in trailing padding
 - **Files inside attribute values:** every value is searched, and findings name the exact location, e.g. `(0008,1140) item 2 > (0029,1010) Private`
@@ -81,7 +83,7 @@ The most dangerous files aren't malformed, just *ambiguous*: different software 
 
 ## Engineering
 
-- **Parser written from scratch** for every native encoding (implicit/explicit, little/big endian, deflated), nested and undefined-length sequences, encapsulated pixel data and Basic Offset Tables. Zero runtime dependencies; files are memory-mapped, never copied.
+- **Parser written from scratch** for every native encoding (implicit/explicit, little/big endian, deflated), nested and undefined-length sequences, encapsulated pixel data and Basic Offset Tables, and bare datasets with no Part 10 header. Zero runtime dependencies. Files are read once (large ones memory-mapped), headers are decoded in place, and values are decoded only when a check asks for them.
 - **Never crashes on hostile input.** Errors become anomalies; parsing resumes at the nearest boundary whose length can still be trusted.
 - **Fuzzed:** Hypothesis property tests check that the parser, the codec walkers and every check terminate and that byte accounting is exact for any input (150,000 cases in deep mode: `HYPOTHESIS_PROFILE=deep pytest tests/test_fuzz.py`). The harness is mutation-tested: a planted length-trusting bug is caught in about a second.
 - **Every claim about other software is a test**, so documentation can't drift from reality.
@@ -107,13 +109,24 @@ radguard scan examples/
 radguard map examples/two-scans-one-file.dcm
 ```
 
-`radguard scan` takes files or directories, `--format json` for machine-readable output, and `--fail-on {info,low,medium,high,critical}` to choose the severity that makes it exit with status 1 (for CI and ingest pipelines). On machines whose application-control policy blocks unsigned launchers (such as Windows Smart App Control), `python -m radguard ...` runs the same commands.
+`radguard scan` takes files or directories, `--format json` for machine-readable output (versioned schema), and `--fail-on {info,low,medium,high,critical}` to choose the severity that counts as a failure.
+
+| Exit status | Meaning |
+|---|---|
+| 0 | Every path was examined; no finding reached `--fail-on` |
+| 1 | At least one finding reached `--fail-on` |
+| 2 | Usage error |
+| 3 | **Scan incomplete**: a file or directory could not be read, or a check failed. Takes precedence over 1, because a verdict built on partial coverage can't be trusted |
+
+RadGuard fails closed: anything it was asked to scan but could not examine is reported, never silently dropped. On machines whose application-control policy blocks unsigned launchers (such as Windows Smart App Control), `python -m radguard ...` runs the same commands.
 
 ## Roadmap
 
 - [x] **L1 structure:** preamble polyglots, byte-coverage parser, hidden payloads, pixel contract, parser differentials
 - [x] L1: value-level carving, encapsulated documents, codestream analysis, self-audit
-- [ ] L1: private-tag analysis; SARIF output; parallel scanning
+- [x] L1: private-data analysis, including decompression of compressed private values
+- [x] Engineering review: fail-closed scanning, bare datasets, strict typing, mutation testing
+- [ ] L1: SARIF output; parallel scanning
 - [ ] **L2 privacy:** PHI in tags (PS3.15 Annex E) and burned-in pixel text (GPU OCR)
 - [ ] **L3 integrity:** CT tamper and deepfake detection, GPU-accelerated
 - [ ] **L4 provenance:** DICOM digital signatures

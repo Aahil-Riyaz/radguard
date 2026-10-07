@@ -92,6 +92,19 @@ Searching anywhere in a file needs more evidence per hit than matching at a fixe
 - **Integer overflow:** not applicable in Python. RadGuard models 32-bit overflow only to warn about C/C++ decoders (`pixels.size-overflow`).
 - **Writes and network:** RadGuard never writes to scanned paths and makes no network connections.
 
+## 2026-10-07: new code reviewed before commit
+
+The day 4 private-data check decompresses attacker data, so it was reviewed against the same threat model before it was committed. Four issues were found in the first draft and fixed, each pinned by a test in `tests/test_private.py`:
+
+| ID | Severity | Issue in the draft | Fix |
+|---|---|---|---|
+| RG-10 | High | When the per-file decompression budget reached zero, the next value was inflated with `max_length=0`, which Python's `zlib` treats as **no limit**: a full bypass of the bomb protection | A spent budget is reported and never passed to the inflater |
+| RG-11 | Medium | Two bytes that look like a zlib header (`78 9C`) in front of encrypted data made the check try to inflate, fail, and skip the entropy test: evasion with two bytes | A value that does not inflate is judged as raw bytes |
+| RG-12 | Medium | A tiny valid zlib stream followed by encrypted bytes inflated cleanly, and the trailing bytes were never examined | Bytes after the end of a compressed stream are reported (`private.data-after-stream`) |
+| RG-13 | Low | The per-file budget was a dataclass default bound when the class was defined, so the module-level limit could not be changed | Read when each scan starts |
+
+The engineering review the same day ([2026-10-07](../review/2026-10-07-engineering-review.md)) also found three fail-open gaps with security impact: scans that could not read some files exited 0, unreadable directories were skipped silently, and DICOM datasets without a Part 10 header were not analysed at all.
+
 ## Residual risks
 
 - RG-04 above 64 MiB on POSIX.

@@ -32,7 +32,7 @@ _CHECK_IDS = {"elf": "elf-polyglot", "macho": "macho-polyglot"}
 
 def check(ctx: FileContext) -> Iterator[Finding]:
     pre = ctx.preamble
-    if not any(pre) or pre.startswith(BENIGN_PREFIXES):
+    if not ctx.part10 or not any(pre) or pre.startswith(BENIGN_PREFIXES):
         return
 
     match = signatures.match_prefix(ctx.buf, 0, PREAMBLE_LEN)

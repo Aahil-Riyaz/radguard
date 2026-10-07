@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from radguard.checks import codestream, pixels, preamble, structure, values
+from radguard.checks import codestream, pixels, preamble, private, structure, values
 from radguard.context import FileContext
 from radguard.findings import Finding
 
@@ -16,4 +16,5 @@ ALL_CHECKS: tuple[Check, ...] = (
     pixels.check,
     codestream.check,
     values.check,
+    private.check,
 )

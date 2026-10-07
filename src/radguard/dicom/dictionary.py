@@ -10,6 +10,8 @@ with or without it.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from radguard.dicom.model import ITEM, ITEM_DELIM, SEQ_DELIM
 
 # tag: (allowed VRs separated by "/", keyword). For implicit VR the last VR is used.
@@ -100,10 +102,16 @@ PHI_TAGS = frozenset({
 
 _STRUCTURAL = {ITEM: "Item", ITEM_DELIM: "ItemDelimitationItem", SEQ_DELIM: "SequenceDelimitationItem"}
 
-try:  # optional: better names in `radguard map`
-    from pydicom.datadict import keyword_for_tag as _pydicom_keyword
-except ImportError:  # pragma: no cover - exercised when pydicom is absent
-    _pydicom_keyword = None
+def _optional_pydicom_names() -> Callable[[int], str] | None:
+    """pydicom's keyword lookup if installed: better names in `radguard map`, nothing else."""
+    try:
+        from pydicom.datadict import keyword_for_tag
+    except ImportError:  # pragma: no cover - exercised when pydicom is absent
+        return None
+    return keyword_for_tag
+
+
+_pydicom_keyword = _optional_pydicom_names()
 
 
 def vr(tag: int) -> str | None:

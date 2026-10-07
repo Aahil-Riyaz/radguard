@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import mmap
 from dataclasses import dataclass, field
+from typing import TypeAlias
 
 UNDEFINED = 0xFFFFFFFF
 
@@ -25,7 +27,11 @@ PADDING = "padding"
 DEFLATE = "deflate"
 KINDS = (PREAMBLE, MAGIC, HEADER, VALUE, PADDING, DEFLATE)
 
-Region = tuple[int, int, str]  # [start, end) and its coverage class
+Region: TypeAlias = tuple[int, int, str]  # [start, end) and its coverage class
+
+# What the parser and every check read from: a private copy of a file, or a
+# read-only map of a large one. Both support len, slicing, find, re and struct.
+Buffer: TypeAlias = bytes | mmap.mmap
 
 
 def tag_str(tag: int) -> str:
@@ -57,6 +63,7 @@ class Element:
     little: bool
     domain: str = "file"  # "file", or "inflated" for deflated transfer syntaxes
     fragments: list[tuple[int, int]] | None = None  # encapsulated pixel data: (offset, length)
+    offset_table: list[int] | None = None  # a valid Basic Offset Table: frame starts, relative to fragment 1
 
     @property
     def undefined(self) -> bool:
@@ -82,10 +89,15 @@ class ParsedFile:
     regions: list[Region]
     inflated: bytes | None = None
     inflated_regions: list[Region] = field(default_factory=list)
+    part10: bool = True  # False: a bare dataset with no preamble or DICM marker
 
     @property
     def dataset_domain(self) -> str:
         return "inflated" if self.inflated is not None else "file"
 
-    def buffer(self, domain: str, file_buf):
-        return self.inflated if domain == "inflated" else file_buf
+    def buffer(self, domain: str, file_buf: Buffer) -> Buffer:
+        if domain != "inflated":
+            return file_buf
+        if self.inflated is None:
+            raise ValueError("this file has no inflated dataset")
+        return self.inflated

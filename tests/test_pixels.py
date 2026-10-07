@@ -1,6 +1,6 @@
 """Pixel check: the image header is a contract; breaking it hides data or breaks decoders."""
 
-from builder import JPEG_BASELINE, PIXEL_DATA, el, encapsulated, fake_pe, image, part10
+from builder import JPEG_BASELINE, PIXEL_DATA, el, encapsulated, fake_pe, image, part10, us
 from conftest import findings_for
 from radguard.findings import Severity
 
@@ -69,3 +69,13 @@ def test_encoding_mismatch_both_ways():
     assert "pixels.encoding-mismatch" in by_check(native_in_jpeg)
     fragments_in_native = part10(image(4, 4, pixel_element=encapsulated(bytes(8))))
     assert "pixels.encoding-mismatch" in by_check(fragments_in_native)
+
+
+def test_conflicting_geometry_is_ambiguous():
+    data = part10(image(8, 8, extra=us(0x00280010, 16)))  # a second Rows, after the first
+    finding = by_check(data)["pixels.ambiguous-geometry"]
+    assert finding.severity is Severity.HIGH and "(8, 16)" in finding.detail
+
+
+def test_repeated_but_identical_geometry_is_not_ambiguous():
+    assert "pixels.ambiguous-geometry" not in by_check(part10(image(8, 8, extra=us(0x00280010, 8))))

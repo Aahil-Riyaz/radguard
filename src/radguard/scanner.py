@@ -1,7 +1,10 @@
-"""Walk paths, identify DICOM Part 10 files, and run every registered check.
+"""Walk paths, identify DICOM files, and run every registered check.
 
 The scanner is the part of RadGuard that touches the file system, and the
-directory being scanned may itself be hostile. See docs/security/self-audit.md.
+directory being scanned may itself be hostile. It fails closed: anything it
+could not examine (an unreadable directory, an unreadable file, a check that
+crashed) is reported as an error, never silently dropped, so a scan that saw
+less than it was asked to can never look clean. See docs/security/self-audit.md.
 """
 
 from __future__ import annotations
@@ -16,19 +19,22 @@ from dataclasses import dataclass, field
 
 from radguard.checks import ALL_CHECKS, Check
 from radguard.context import HEADER_LEN, MAGIC, PREAMBLE_LEN, FileContext
+from radguard.dicom import looks_like_dataset
+from radguard.dicom.model import Buffer
 from radguard.findings import Finding, Severity
 
 # Files up to this size are read into memory; larger ones are memory-mapped.
 # A mapped file that another process truncates raises SIGBUS on POSIX when the
 # missing pages are touched, killing the process; a private copy cannot shrink.
-READ_LIMIT = 64 << 20
+READ_LIMIT = 64 << 20  # pragma: no mutate (tuning)
+SNIFF_LEN = 4096  # enough to recognise a DICOM file before reading the rest of it; pragma: no mutate (tuning)
 
 # Findings kept per check id per file; the rest are summarised in one finding.
-MAX_FINDINGS_PER_CHECK = 100
+MAX_FINDINGS_PER_CHECK = 100  # pragma: no mutate (tuning)
 
 _OPEN_FLAGS = (
     os.O_RDONLY
-    | getattr(os, "O_BINARY", 0)  # Windows: no newline translation
+    | getattr(os, "O_BINARY", 0)  # Windows: no newline translation; pragma: no mutate (platform default)
     | getattr(os, "O_NONBLOCK", 0)  # POSIX: opening a FIFO must not wait for a writer
     | getattr(os, "O_NOCTTY", 0)  # POSIX: a terminal device never becomes our controlling tty
 )
@@ -39,26 +45,40 @@ class FileResult:
     path: str
     is_dicom: bool
     findings: list[Finding] = field(default_factory=list)
-    error: str | None = None
+    error: str | None = None  # the path could not be examined (fully)
+    note: str | None = None  # deliberately not examined, and why
 
 
-def iter_files(paths: Iterable[str]) -> Iterator[str]:
-    # DICOM files frequently have no extension (or numeric ones), so we
-    # consider every regular file and let the magic bytes decide. os.walk does
-    # not follow directory symlinks, so symlink loops cannot trap the walk.
+def scan_paths(paths: Iterable[str], checks: Iterable[Check] = ALL_CHECKS) -> Iterator[FileResult]:
+    """Scan files and directory trees. DICOM files often have no extension, so every
+    regular file is considered and its first bytes decide."""
+    checks = tuple(checks)
     for path in paths:
-        if os.path.isdir(path):
-            for root, dirs, files in os.walk(path):
-                dirs.sort()
-                for name in sorted(files):
-                    yield os.path.join(root, name)
-        else:
-            yield path
+        if not os.path.isdir(path):
+            yield scan_file(path, checks)
+            continue
+        errors: list[OSError] = []  # os.walk reports unreadable directories here, not by raising
+        for root, dirs, files in os.walk(path, onerror=errors.append):
+            yield from _walk_errors(errors)
+            dirs.sort()
+            for name in dirs:
+                if os.path.islink(os.path.join(root, name)):  # os.walk does not descend into these
+                    yield FileResult(os.path.join(root, name), is_dicom=False,
+                                     note="symbolic link to a directory: not followed")
+            for name in sorted(files):
+                yield scan_file(os.path.join(root, name), checks)
+        yield from _walk_errors(errors)
+
+
+def _walk_errors(errors: list[OSError]) -> Iterator[FileResult]:
+    for exc in errors:
+        yield FileResult(str(exc.filename), is_dicom=False, error=f"cannot list directory: {exc.strerror}")
+    errors.clear()
 
 
 @contextmanager
 def open_dicom(path: str) -> Iterator[FileContext | None]:
-    """Yield a FileContext for a regular Part 10 file, or None for anything else.
+    """Yield a FileContext for a regular DICOM file, or None for anything else.
 
     Only regular files are ever read. A FIFO would block forever, a device
     could stream endlessly or have side effects on open (tape drives rewind).
@@ -72,24 +92,37 @@ def open_dicom(path: str) -> Iterator[FileContext | None]:
     fd = os.open(path, _OPEN_FLAGS)
     try:
         st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_size < HEADER_LEN:
+        if not stat.S_ISREG(st.st_mode):
             yield None
             return
-        if st.st_size <= READ_LIMIT:
-            buf = _read(fd, st.st_size)
-            yield FileContext(path, buf, len(buf)) if buf[PREAMBLE_LEN:HEADER_LEN] == MAGIC else None
+        if st.st_size > READ_LIMIT:
+            with mmap.mmap(fd, 0, access=mmap.ACCESS_READ) as view:
+                yield _context(path, view)
             return
-        with mmap.mmap(fd, 0, access=mmap.ACCESS_READ) as view:
-            yield FileContext(path, view, len(view)) if view[PREAMBLE_LEN:HEADER_LEN] == MAGIC else None
+        head = _read(fd, min(st.st_size, SNIFF_LEN))
+        if _context(path, head) is None:  # decide before reading the rest of a large non-DICOM file
+            yield None
+            return
+        buf = head + _read(fd, st.st_size - len(head))
+        yield _context(path, buf)
     finally:
         os.close(fd)
 
 
+def _context(path: str, buf: Buffer) -> FileContext | None:
+    if len(buf) >= HEADER_LEN and buf[PREAMBLE_LEN:HEADER_LEN] == MAGIC:
+        return FileContext(path, buf, len(buf))
+    if looks_like_dataset(buf):
+        return FileContext(path, buf, len(buf), part10=False)
+    return None
+
+
 def _read(fd: int, size: int) -> bytes:
     # The file may shrink while we read it; take what is there, never more than `size`.
-    chunks, remaining = [], size
+    chunks: list[bytes] = []
+    remaining = size
     while remaining:
-        chunk = os.read(fd, min(remaining, 8 << 20))
+        chunk = os.read(fd, min(remaining, 8 << 20))  # pragma: no mutate (tuning)
         if not chunk:
             break
         chunks.append(chunk)
@@ -102,7 +135,8 @@ def scan_file(path: str, checks: Iterable[Check] = ALL_CHECKS) -> FileResult:
         with open_dicom(path) as ctx:
             if ctx is None:
                 return FileResult(path, is_dicom=False)
-            findings, errors = [], []
+            findings: list[Finding] = []
+            errors: list[str] = []
             for check in checks:
                 try:
                     findings.extend(check(ctx))
@@ -115,8 +149,9 @@ def scan_file(path: str, checks: Iterable[Check] = ALL_CHECKS) -> FileResult:
 
 def _cap(path: str, findings: list[Finding]) -> list[Finding]:
     """One file must not be able to flood the report (or the analyst's memory)."""
-    kept, dropped = [], Counter()
-    seen = Counter()
+    kept: list[Finding] = []
+    seen: Counter[str] = Counter()
+    dropped: Counter[str] = Counter()
     for f in findings:
         seen[f.check] += 1
         if seen[f.check] <= MAX_FINDINGS_PER_CHECK:
@@ -129,9 +164,3 @@ def _cap(path: str, findings: list[Finding]) -> list[Finding]:
                             f"kept the first {MAX_FINDINGS_PER_CHECK} findings per check; suppressed {summary}",
                             path))
     return kept
-
-
-def scan_paths(paths: Iterable[str], checks: Iterable[Check] = ALL_CHECKS) -> Iterator[FileResult]:
-    checks = tuple(checks)
-    for path in iter_files(paths):
-        yield scan_file(path, checks)

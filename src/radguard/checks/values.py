@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from radguard import signatures
 from radguard.context import FileContext
 from radguard.dicom import values
-from radguard.dicom.model import PIXEL_DATA, Element
+from radguard.dicom.model import PIXEL_DATA, Buffer, Element
 from radguard.dicom.paths import Locator
 from radguard.findings import Finding, Severity
 
@@ -42,7 +42,7 @@ def check(ctx: FileContext) -> Iterator[Finding]:
     parsed = ctx.parsed
     for domain in ("file", "inflated") if parsed.inflated is not None else ("file",):
         buf = parsed.buffer(domain, ctx.buf)
-        locator = Locator(parsed, domain)
+        locator = Locator(parsed, domain, ctx.buf)
         for match in ctx.matches(domain).matches:
             el = locator.element_at(match.offset)
             # Pixel Data and Encapsulated Documents have dedicated checks below and in pixels/codestream.
@@ -61,19 +61,22 @@ def check(ctx: FileContext) -> Iterator[Finding]:
                 yield from _document(ctx, buf, parsed.elements, locator, el)
 
 
-def _document(ctx: FileContext, buf, elements: list[Element], locator: Locator, doc: Element) -> Iterator[Finding]:
+def _document(ctx: FileContext, buf: Buffer, elements: list[Element], locator: Locator,
+              doc: Element) -> Iterator[Finding]:
     mime_el = next((e for e in elements if e.tag == MIME_TYPE and e.parent == doc.parent
                     and e.domain == doc.domain), None)
-    mime = values.raw(buf, mime_el, 128).rstrip(b" \x00").decode("ascii", "replace").lower() if mime_el else None
+    raw_mime = values.raw(buf, mime_el, 128) if mime_el else b""  # pragma: no mutate (equivalent: > any MIME type)
+    mime = raw_mime.rstrip(b" \x00").decode("ascii", "replace").lower() or None  # an empty type is a missing type
     hits = ctx.matches(doc.domain).within(doc.value_offset, doc.end)
     actual = signatures.match_prefix(buf, doc.value_offset, doc.end)
     where = locator.path(doc)
 
     executables = [m for m in hits if m.signature.severity is Severity.CRITICAL]
     if executables:
+        listed = ", ".join(signatures.match_text(m) for m in executables[:5])  # pragma: no mutate (display)
         yield Finding("values.document-payload", Severity.CRITICAL, "Executable inside an encapsulated document",
-                      f"{where} declares {mime or 'no MIME type'} but contains "
-                      + ", ".join(signatures.match_text(m) for m in executables[:5]), ctx.path, executables[0].offset)
+                      f"{where} declares {mime or 'no MIME type'} but contains {listed}", ctx.path,
+                      executables[0].offset)
     if mime is None:
         yield Finding("values.document-type-missing", Severity.MEDIUM, "Encapsulated document without a MIME type",
                       f"{where} has no MIME Type of Encapsulated Document (0042,0012); viewers must guess how to "

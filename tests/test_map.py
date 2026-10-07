@@ -21,4 +21,4 @@ def test_map_can_show_phi_on_request(write_file, capsys):
 
 
 def test_map_rejects_non_dicom(write_file, capsys):
-    assert main(["map", write_file("notes.txt", b"hello" * 40)]) == 2
+    assert main(["map", write_file("notes.txt", b"hello" * 40)]) == 3  # could not analyse

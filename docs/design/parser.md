@@ -24,7 +24,7 @@ None of this is a pydicom bug. It is what a reader is supposed to do. RadGuard n
 1. **Total byte accounting.** Every byte of the file is assigned exactly one class: preamble, magic, element header, value, padding or deflate stream. Bytes with no class are *unexplained*, and unexplained bytes are where payloads hide. Property tests check that `explained + unexplained == file size` for every input.
 2. **Never raise on input.** Malformed structure becomes an `Anomaly(code, message, offset)` record. Only bugs raise.
 3. **Bounded resources.** Nesting depth (32), element count (1M), inflated size (256 MiB), carving window (64 MiB per region) and signature candidates (4,096 per magic) are capped, so hostile files cannot exhaust the scanner.
-4. **Zero copy.** Files are memory-mapped; headers are decoded with `struct.unpack_from` straight from the map; values are decoded only on demand.
+4. **Read once, decode on demand.** Files up to 64 MiB are read once into private memory (a memory map can raise an uncatchable SIGBUS if the file is truncated mid-scan); larger files are memory-mapped. Headers are decoded with `struct.unpack_from` in place, and values only when a check asks for them.
 5. **Determinism.** Parsing never depends on optional libraries. pydicom, when installed, only supplies display names.
 
 ## Recovery model: trust lengths, not content
@@ -52,6 +52,10 @@ Implicit-VR files do not say which elements are sequences, and private sequences
 - a defined-length value that begins with an Item tag whose length fits is *probably* a sequence.
 
 The second rule is a guess, so it is **tentative**: the parser snapshots its anomaly, element and region lists, parses the value as a sequence, and rolls everything back unless the parse is perfectly clean. A coincidental `FE FF 00 E0` at the start of a binary value costs nothing.
+
+## Bare datasets
+
+A file without the 128-byte preamble and `DICM` marker is still a DICOM dataset to lenient readers: pydicom reads one with `force=True` (verified in `tests/test_differential.py`), and so do many toolkits. Skipping such files would be a blind spot, so `parse(buf, part10=False)` reads them. If the data starts with File Meta, its transfer syntax is used; otherwise the encoding is inferred from the first element (explicit VR when the VR bytes say so, else implicit VR, the historical default). `looks_like_dataset` decides which files qualify. It is deliberately strict: the first element must be in group 0002 or 0008, and the first three top-level elements must parse cleanly in ascending order. 2,000 random buffers that already start with the right group bytes are all rejected in the tests.
 
 ## Transfer syntax sniffing
 

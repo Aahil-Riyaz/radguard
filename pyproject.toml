@@ -28,6 +28,7 @@ dev = [
     # Reference implementation for differential tests (what real software sees)
     "pydicom>=3.0",
     "numpy>=1.26",
+    "coverage>=7.4",
 ]
 
 [project.scripts]
@@ -39,3 +40,19 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests"]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["radguard"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+# Strict typing for the package. On Windows machines whose application-control
+# policy blocks mypy's compiled build: pip install --no-binary mypy mypy
+[tool.mypy]
+files = ["src/radguard"]
+python_version = "3.10"
+strict = true

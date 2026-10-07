@@ -60,9 +60,8 @@ def write_png(path: Path, pixels: np.ndarray) -> None:
                      + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 
-def main() -> None:
-    out = ROOT / "examples"
-    out.mkdir(exist_ok=True)
+def main(out: Path = ROOT / "examples", fig: Path = ROOT / "docs" / "img" / "two-scans-one-file.png") -> None:
+    out.mkdir(parents=True, exist_ok=True)
     clean, tampered = phantom(False).tobytes(), phantom(True).tobytes()
 
     two_scans = part10(image(N, N, clean) + el(PIXEL_DATA, "OB", tampered))
@@ -84,7 +83,6 @@ def main() -> None:
         copy2 = pydicom.dcmread(io.BytesIO(two_scans)).pixel_array
     scale, gap = 3, np.full((N * 3, 12), 255, np.uint8)
     big = [np.kron(c, np.ones((scale, scale), np.uint8)) for c in (copy1, copy2)]
-    fig = ROOT / "docs" / "img" / "two-scans-one-file.png"
     fig.parent.mkdir(parents=True, exist_ok=True)
     write_png(fig, np.hstack([big[0], gap, big[1]]))
     print(f"wrote {len(samples)} examples to {out} and {fig}")

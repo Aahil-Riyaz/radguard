@@ -13,9 +13,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - run: pip install ruff
+      - run: pip install ruff mypy pydicom
       # Undefined names, unused imports, syntax errors: the class of latent bug tests can miss.
       - run: ruff check --select E9,F src tests scripts
+      # Strict static typing for the whole package (config in pyproject.toml).
+      - run: mypy
 
   test:
     runs-on: ubuntu-latest
@@ -28,4 +30,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: pytest -q
+      # Branch coverage, with the build failing below the floor set in pyproject.toml.
+      - run: coverage run -m pytest -q
+      - run: coverage report

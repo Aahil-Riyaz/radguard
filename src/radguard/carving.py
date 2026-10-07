@@ -19,14 +19,15 @@ import bisect
 import re
 from dataclasses import dataclass, field
 
+from radguard.dicom.model import Buffer
 from radguard.signatures import SIGNATURES, Match, Signature
 
 
 @dataclass(frozen=True)
 class Budget:
-    max_bytes: int = 1 << 30  # bytes of a buffer searched
-    max_candidates: int = 1_000_000  # raw magic hits examined, split fairly across magics
-    max_matches: int = 10_000  # validated matches kept
+    max_bytes: int = 1 << 30  # bytes of a buffer searched; pragma: no mutate (tuning)
+    max_candidates: int = 1_000_000  # raw magic hits examined, split fairly across magics; pragma: no mutate (tuning)
+    max_matches: int = 10_000  # validated matches kept; pragma: no mutate (tuning)
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,7 @@ class MatchIndex:
         return self.matches[lo:hi]
 
 
-def carve(buf, budget: Budget = Budget()) -> MatchIndex:
+def carve(buf: Buffer, budget: Budget = Budget()) -> MatchIndex:
     end = min(len(buf), budget.max_bytes)
     exhausted: list[Exhaustion] = []
     if end < len(buf):
@@ -59,7 +60,8 @@ def carve(buf, budget: Budget = Budget()) -> MatchIndex:
     owners: dict[bytes, Signature] = {m: sig for sig in SIGNATURES for m in sig.scan_magics}
     share = max(1, budget.max_candidates // len(owners))
     seen = dict.fromkeys(owners, 0)
-    active = sorted(owners, key=len, reverse=True)  # longest first, so no magic shadows a longer one
+    # Longest first, so no magic could shadow a longer one.
+    active = sorted(owners, key=len, reverse=True)  # pragma: no mutate (equivalent: no magic prefixes another)
     pattern = _compile(active)
     matches: list[Match] = []
     pos = 0
@@ -81,12 +83,12 @@ def carve(buf, budget: Budget = Budget()) -> MatchIndex:
         sig = owners[magic]
         detail = sig.validate(buf, hit.start()) if sig.validate else ""
         if detail is not None:
-            matches.append(Match(hit.start(), sig, detail))
-            if len(matches) >= budget.max_matches:
+            if len(matches) == budget.max_matches:  # this is match max+1: only now is "more than" true
                 exhausted.append(Exhaustion("matches", hit.start(), f"more than {budget.max_matches:,} embedded "
                                             "files; the remainder of the buffer was not searched"))
                 break
-        pos = hit.start() + 1
+            matches.append(Match(hit.start(), sig, detail))
+        pos = hit.start() + 1  # pragma: no mutate (equivalent: no magic overlaps another)
     return MatchIndex(matches, exhausted)
 
 

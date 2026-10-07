@@ -7,6 +7,7 @@ invisible formatting characters.
 """
 
 import subprocess
+import warnings
 from pathlib import Path
 
 import pytest
@@ -36,3 +37,8 @@ def test_no_invisible_or_bidi_characters(path):
     assert not bad, f"{path.name}: invisible characters at {bad[:5]}"
     if path.suffix == ".py":
         assert text.isascii(), f"{path.name}: Python sources must be ASCII"
+        too_long = [n for n, line in enumerate(text.split("\n"), 1) if len(line.rstrip("\r")) > 120]
+        assert not too_long, f"{path.name}: lines over 120 characters: {too_long[:5]}"
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # e.g. invalid escape sequences such as "\d" in a normal string
+            compile(text, str(path), "exec")
