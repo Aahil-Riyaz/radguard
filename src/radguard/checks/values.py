@@ -42,7 +42,7 @@ def check(ctx: FileContext) -> Iterator[Finding]:
     parsed = ctx.parsed
     for domain in ("file", "inflated") if parsed.inflated is not None else ("file",):
         buf = parsed.buffer(domain, ctx.buf)
-        locator = Locator(parsed, domain)
+        locator = Locator(parsed, domain, ctx.buf)
         for match in ctx.matches(domain).matches:
             el = locator.element_at(match.offset)
             # Pixel Data and Encapsulated Documents have dedicated checks below and in pixels/codestream.

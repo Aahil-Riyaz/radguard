@@ -1,4 +1,4 @@
-"""Human-readable locations for elements and bytes: "(0008,1140) item 2 > (0029,1010) Private"."""
+"""Human-readable locations: "(0008,1140) item 2 > (0029,1010) Private [SIEMENS CSA HEADER]"."""
 
 from __future__ import annotations
 
@@ -6,14 +6,40 @@ import bisect
 from collections import Counter
 
 from radguard.dicom import dictionary
-from radguard.dicom.model import ITEM, TRAILING_PADDING, Element, ParsedFile, tag_str
+from radguard.dicom.model import ITEM, TRAILING_PADDING, Buffer, Element, ParsedFile, tag_str
+from radguard.signatures import printable
+
+CreatorKey = tuple[str, "int | None", int, int]  # (domain, parent, group, block)
+
+
+def private_creators(parsed: ParsedFile, file_buf: Buffer) -> dict[CreatorKey, str]:
+    """Private Creator values by the block they reserve, per dataset (PS3.5 7.8.1)."""
+    creators: dict[CreatorKey, str] = {}
+    for el in parsed.elements:
+        group, elem = el.tag >> 16, el.tag & 0xFFFF
+        if group % 2 and 0x0010 <= elem <= 0x00FF:  # odd groups only, so never the Item tag (FFFE)
+            raw = bytes(parsed.buffer(el.domain, file_buf)[el.value_offset : el.end]).rstrip(b" \x00")
+            text = printable(raw, 48)  # attacker-controlled; pragma: no mutate (display limit)
+            creators.setdefault((el.domain, el.parent, group, elem), text)
+    return creators
+
+
+def name(el: Element, creators: dict[CreatorKey, str]) -> str:
+    """Keyword for an element; private data elements also name the creator that owns them."""
+    keyword = dictionary.keyword(el.tag)
+    group, elem = el.tag >> 16, el.tag & 0xFFFF
+    if group % 2 and elem >= 0x1000:
+        owner = creators.get((el.domain, el.parent, group, elem >> 8))
+        return f"{keyword} [{owner if owner is not None else 'no creator'}]"
+    return keyword
 
 
 class Locator:
     """Maps offsets to the leaf element whose value contains them, and elements to paths."""
 
-    def __init__(self, parsed: ParsedFile, domain: str):
+    def __init__(self, parsed: ParsedFile, domain: str, file_buf: Buffer):
         self.elements = parsed.elements
+        self.creators = private_creators(parsed, file_buf)
         ordinals: dict[int, int] = {}
         counter: Counter[int | None] = Counter()
         spans: list[tuple[int, int, int]] = []
@@ -38,7 +64,7 @@ class Locator:
         return None
 
     def path(self, el: Element) -> str:
-        parts = [f"{tag_str(el.tag)} {dictionary.keyword(el.tag)}"]
+        parts = [f"{tag_str(el.tag)} {name(el, self.creators)}"]
         parent = el.parent
         while parent is not None:  # parent chain: element -> item -> sequence -> item ...
             item = self.elements[parent]

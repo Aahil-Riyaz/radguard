@@ -6,24 +6,25 @@ from collections import Counter
 
 from radguard import signatures
 from radguard.carving import MatchIndex, carve
-from radguard.dicom import ParsedFile, coverage, dictionary, values
+from radguard.dicom import ParsedFile, coverage, dictionary, paths, values
 from radguard.dicom.model import ITEM, PIXEL_DATA, Buffer, Element, Region, tag_str
 
 
 def render(path: str, buf: Buffer, parsed: ParsedFile, *, max_depth: int | None = None,
            show_phi: bool = False) -> list[str]:
     lines = [path, f"{parsed.size:,} bytes, {parsed.syntax.name}", "", f"{'offset':>8}  {'length':>10}  structure"]
-    lines += _domain(buf, parsed, "file", parsed.regions, parsed.size, carve(buf), max_depth, show_phi)
+    creators = paths.private_creators(parsed, buf)  # resolved against the file buffer, for every domain
+    lines += _domain(buf, parsed, "file", parsed.regions, parsed.size, carve(buf), creators, max_depth, show_phi)
     if parsed.inflated is not None:
         lines += ["", f"inflated dataset: {len(parsed.inflated):,} bytes (offsets below are within it)"]
         lines += _domain(parsed.inflated, parsed, "inflated", parsed.inflated_regions,
-                         len(parsed.inflated), carve(parsed.inflated), max_depth, show_phi)
+                         len(parsed.inflated), carve(parsed.inflated), creators, max_depth, show_phi)
     lines += ["", _coverage_line(parsed.regions, parsed.size)]
     return lines
 
 
 def _domain(buf: Buffer, parsed: ParsedFile, domain: str, regions: list[Region], size: int, index: MatchIndex,
-            max_depth: int | None, show_phi: bool) -> list[str]:
+            creators: dict[paths.CreatorKey, str], max_depth: int | None, show_phi: bool) -> list[str]:
     rows: list[tuple[int, int, str]] = []  # (offset, order at that offset, line)
     if domain == "file" and parsed.part10:
         pre = bytes(buf[:128])
@@ -40,7 +41,7 @@ def _domain(buf: Buffer, parsed: ParsedFile, domain: str, regions: list[Region],
             item_numbers[el.parent] += 1
             label = f"Item #{item_numbers[el.parent]}"
         else:
-            label = f"{tag_str(el.tag)} {el.vr:<2}  {dictionary.keyword(el.tag)}"
+            label = f"{tag_str(el.tag)} {el.vr:<2}  {paths.name(el, creators)}"
         indent = "  " * (2 * el.depth - (el.tag == ITEM))
         length = "undefined" if el.undefined else f"{el.length:,}"
         value = _value(buf, el, children.get(idx, 0), show_phi)

@@ -16,7 +16,8 @@ EXPECTED = {
     "two-scans-one-file.dcm": {"pixels.duplicate-pixel-data"},
     "hidden-frame.dcm": {"pixels.slack"},
     "appended-executable.dcm": {"structure.hidden-payload"},
-    "preamble-polyglot.dcm": {"preamble.pe-polyglot"},
+    # The PE header hides in a private element that no Private Creator reserves.
+    "preamble-polyglot.dcm": {"preamble.pe-polyglot", "private.orphan-element"},
 }
 
 

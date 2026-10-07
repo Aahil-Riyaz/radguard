@@ -27,6 +27,8 @@ def test_pe_polyglot_is_critical(write_file):
     result = scan_file(path)
     [finding] = [f for f in result.findings if f.check.startswith("preamble.")]
     assert finding.check == "preamble.pe-polyglot"
+    # The PE header hides in a private element no creator reserves, which is reported too.
+    assert "private.orphan-element" in {f.check for f in result.findings}
     assert finding.severity is Severity.CRITICAL
     with open(path, "rb") as fh:
         fh.seek(finding.offset)
