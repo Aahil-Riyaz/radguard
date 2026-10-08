@@ -5,12 +5,20 @@ on:
   pull_request:
   workflow_dispatch:  # "Run workflow" button on the Actions tab
 
+# Least privilege: the token can only read the repository unless a job asks for more.
+permissions:
+  contents: read
+
+# Third-party actions are pinned to full commit SHAs, not tags: a tag can be moved to malicious code
+# (as happened to tj-actions/changed-files in 2025), a commit cannot.
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.13"
       - run: pip install ruff mypy pydicom
@@ -25,11 +33,57 @@ jobs:
       matrix:
         python-version: ["3.10", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
       # Branch coverage, with the build failing below the floor set in pyproject.toml.
       - run: coverage run -m pytest -q
       - run: coverage report
+
+  # RadGuard scans its own deliberately hostile examples and uploads the SARIF log to GitHub code scanning.
+  # This is the end-to-end test of the SARIF output: GitHub rejects the whole upload if anything in it is
+  # malformed, and the job then fails. The alerts appear under Security > Code scanning, category
+  # "radguard-examples"; they describe the example files, which are inert test fixtures.
+  code-scanning:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # upload SARIF
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: pip install .
+      # Exit status 1 means findings, which the examples are built to produce; 2 or 3 fail the job.
+      - run: radguard scan examples --format sarif --output radguard.sarif || [ $? -eq 1 ]
+      - uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+        id: upload
+        with:
+          sarif_file: radguard.sarif
+          category: radguard-examples
+      # The action stops waiting after about two and a half minutes and then passes, even if GitHub later
+      # rejects the file. Ask GitHub how processing actually ended. (Inputs go through env, never inline into
+      # the script, so no value can inject shell syntax.)
+      - name: Check that GitHub accepted the SARIF log
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SARIF_ID: ${{ steps.upload.outputs.sarif-id }}
+        run: |
+          for attempt in $(seq 1 30); do
+            status=$(gh api "repos/$GITHUB_REPOSITORY/code-scanning/sarifs/$SARIF_ID" --jq .processing_status)
+            echo "attempt $attempt: processing status $status"
+            case "$status" in
+              complete) exit 0 ;;
+              failed) gh api "repos/$GITHUB_REPOSITORY/code-scanning/sarifs/$SARIF_ID" --jq .errors; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "GitHub did not finish processing the upload within 5 minutes"
+          exit 1

@@ -54,7 +54,7 @@ def check(ctx: FileContext) -> Iterator[Finding]:
                 f"{sig.label} inside an attribute value",
                 f"{signatures.match_text(match)}, {match.offset - el.value_offset:,} bytes into "
                 f"{locator.path(el)} ({el.vr}, {el.end - el.value_offset:,} bytes)",
-                ctx.path, match.offset,
+                ctx.path, match.offset, domain=domain,
             )
         for el in parsed.elements:
             if el.tag == ENCAPSULATED_DOCUMENT and el.domain == domain and el.fragments is None:
@@ -76,11 +76,11 @@ def _document(ctx: FileContext, buf: Buffer, elements: list[Element], locator: L
         listed = ", ".join(signatures.match_text(m) for m in executables[:5])  # pragma: no mutate (display)
         yield Finding("values.document-payload", Severity.CRITICAL, "Executable inside an encapsulated document",
                       f"{where} declares {mime or 'no MIME type'} but contains {listed}", ctx.path,
-                      executables[0].offset)
+                      executables[0].offset, domain=doc.domain)
     if mime is None:
         yield Finding("values.document-type-missing", Severity.MEDIUM, "Encapsulated document without a MIME type",
                       f"{where} has no MIME Type of Encapsulated Document (0042,0012); viewers must guess how to "
-                      "open it", ctx.path, doc.value_offset)
+                      "open it", ctx.path, doc.value_offset, domain=doc.domain)
         return
     expected = _EXPECTED.get(mime)
     if expected and (actual is None or actual.signature.kind != expected):
@@ -88,4 +88,4 @@ def _document(ctx: FileContext, buf: Buffer, elements: list[Element], locator: L
         yield Finding("values.document-type-mismatch", Severity.HIGH, "Encapsulated document is not what it claims",
                       f"{where} declares {signatures.printable(mime.encode())} but its content is {found}; "
                       "software that trusts the declared type and software that sniffs the content handle it "
-                      "differently", ctx.path, doc.value_offset)
+                      "differently", ctx.path, doc.value_offset, domain=doc.domain)

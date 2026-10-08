@@ -1,0 +1,3686 @@
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "RadGuard",
+          "semanticVersion": "0.1.0.dev0",
+          "informationUri": "https://github.com/Aahil-Riyaz/radguard",
+          "rules": [
+            {
+              "id": "pixels.ambiguous-geometry",
+              "name": "PixelsAmbiguousGeometry",
+              "shortDescription": {
+                "text": "Conflicting image dimensions"
+              },
+              "fullDescription": {
+                "text": "Rows, Columns, Samples per Pixel, Number of Frames or Bits Allocated appears more than once with different values, so readers that keep different copies decode the same pixel bytes with different dimensions."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Rows, Columns, Samples per Pixel, Number of Frames or Bits Allocated appears more than once with different values, so readers that keep different copies decode the same pixel bytes with different dimensions.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsambiguous-geometry",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.analysis-incomplete",
+              "name": "PixelsAnalysisIncomplete",
+              "shortDescription": {
+                "text": "Frames beyond the inspection budget"
+              },
+              "fullDescription": {
+                "text": "Compressed frames beyond the per-file reassembly budget were not inspected."
+              },
+              "help": {
+                "text": "Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile.",
+                "markdown": "Compressed frames beyond the per-file reassembly budget were not inspected.\n\n**What to do:** Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsanalysis-incomplete",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "incomplete"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              }
+            },
+            {
+              "id": "pixels.codec-mismatch",
+              "name": "PixelsCodecMismatch",
+              "shortDescription": {
+                "text": "Frame is not the codec its transfer syntax declares"
+              },
+              "fullDescription": {
+                "text": "A frame does not start with its codec's start marker, so decoders either fail or, if they sniff the content, decode something else. Critical when the frame is an executable."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "A frame does not start with its codec's start marker, so decoders either fail or, if they sniff the content, decode something else. Critical when the frame is an executable.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelscodec-mismatch",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.codestream-trailing-data",
+              "name": "PixelsCodestreamTrailingData",
+              "shortDescription": {
+                "text": "Data after the end of a compressed frame"
+              },
+              "fullDescription": {
+                "text": "Decoders stop at a codestream's end marker, so bytes after it are never displayed: a second hidden image, or an executable. Medium for a few unexplained bytes, critical for an executable."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "Decoders stop at a codestream's end marker, so bytes after it are never displayed: a second hidden image, or an executable. Medium for a few unexplained bytes, critical for an executable.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelscodestream-trailing-data",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-514"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "514",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.duplicate-pixel-data",
+              "name": "PixelsDuplicatePixelData",
+              "shortDescription": {
+                "text": "Two images in one file"
+              },
+              "fullDescription": {
+                "text": "The dataset has more than one Pixel Data element. Software that keeps the first copy and software that keeps the last display different images from the same file, so a radiologist's viewer and an AI pipeline can be shown different scans."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "The dataset has more than one Pixel Data element. Software that keeps the first copy and software that keeps the last display different images from the same file, so a radiologist's viewer and an AI pipeline can be shown different scans.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsduplicate-pixel-data",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.embedded-file",
+              "name": "PixelsEmbeddedFile",
+              "shortDescription": {
+                "text": "File stored as image pixels"
+              },
+              "fullDescription": {
+                "text": "The declared image area contains a recognised file format. Viewers render it as noise, and nothing that only displays images will notice. Severity follows what was found: critical for executables."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The declared image area contains a recognised file format. Viewers render it as noise, and nothing that only displays images will notice. Severity follows what was found: critical for executables.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsembedded-file",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506"
+                ],
+                "precision": "high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.encoding-mismatch",
+              "name": "PixelsEncodingMismatch",
+              "shortDescription": {
+                "text": "Pixel Data encoding contradicts the transfer syntax"
+              },
+              "fullDescription": {
+                "text": "Compressed transfer syntaxes require encapsulated Pixel Data and native ones require a single value. A mismatch sends decoders down different code paths for the same bytes."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Compressed transfer syntaxes require encapsulated Pixel Data and native ones require a single value. A mismatch sends decoders down different code paths for the same bytes.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_A.4.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsencoding-mismatch",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.hidden-frames",
+              "name": "PixelsHiddenFrames",
+              "shortDescription": {
+                "text": "More frames than declared"
+              },
+              "fullDescription": {
+                "text": "Encapsulated Pixel Data holds more frames than Number of Frames declares; decoders that trust the header show fewer frames than decoders that walk the fragments."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Encapsulated Pixel Data holds more frames than Number of Frames declares; decoders that trust the header show fewer frames than decoders that walk the fragments.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_A.4.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelshidden-frames",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.invalid-geometry",
+              "name": "PixelsInvalidGeometry",
+              "shortDescription": {
+                "text": "Zero or negative image dimension"
+              },
+              "fullDescription": {
+                "text": "The image header declares a zero or negative dimension (Number of Frames is text, so \"0\" or \"-5\" is easy to write). Decoders disagree on what, if anything, to render, and size arithmetic on such values is a classic source of decoder bugs."
+              },
+              "help": {
+                "text": "Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident.",
+                "markdown": "The image header declares a zero or negative dimension (Number of Frames is text, so \"0\" or \"-5\" is easy to write). Decoders disagree on what, if anything, to render, and size arithmetic on such values is a classic source of decoder bugs.\n\n**What to do:** Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsinvalid-geometry",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "memory-safety",
+                  "external/cwe/cwe-1284"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "1284",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.malformed-codestream",
+              "name": "PixelsMalformedCodestream",
+              "shortDescription": {
+                "text": "Malformed compressed frame"
+              },
+              "fullDescription": {
+                "text": "A JPEG, JPEG-LS, JPEG 2000 or RLE frame breaks its own format's structure. Malformed codestreams are the input class behind many image decoder memory-safety bugs."
+              },
+              "help": {
+                "text": "Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident.",
+                "markdown": "A JPEG, JPEG-LS, JPEG 2000 or RLE frame breaks its own format's structure. Malformed codestreams are the input class behind many image decoder memory-safety bugs.\n\n**What to do:** Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsmalformed-codestream",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "memory-safety"
+                ],
+                "precision": "high",
+                "security-severity": "5.5"
+              }
+            },
+            {
+              "id": "pixels.missing-frames",
+              "name": "PixelsMissingFrames",
+              "shortDescription": {
+                "text": "Fewer frames than declared"
+              },
+              "fullDescription": {
+                "text": "Encapsulated Pixel Data holds fewer frames than Number of Frames declares; decoders that trust the header look for frames that are not there."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Encapsulated Pixel Data holds fewer frames than Number of Frames declares; decoders that trust the header look for frames that are not there.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_A.4.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsmissing-frames",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.multiple-representations",
+              "name": "PixelsMultipleRepresentations",
+              "shortDescription": {
+                "text": "Integer and floating-point pixel data in one file"
+              },
+              "fullDescription": {
+                "text": "Pixel Data and (Double) Float Pixel Data are mutually exclusive; which one is displayed depends on the software."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Pixel Data and (Double) Float Pixel Data are mutually exclusive; which one is displayed depends on the software.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsmultiple-representations",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.size-overflow",
+              "name": "PixelsSizeOverflow",
+              "shortDescription": {
+                "text": "Image size overflows 32-bit arithmetic"
+              },
+              "fullDescription": {
+                "text": "Rows x Columns x Samples x Frames x Bits needs 4 GiB or more. A decoder that computes the size in 32 bits allocates a small buffer and then writes the full image into it: a heap overflow."
+              },
+              "help": {
+                "text": "Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident.",
+                "markdown": "Rows x Columns x Samples x Frames x Bits needs 4 GiB or more. A decoder that computes the size in 32 bits allocates a small buffer and then writes the full image into it: a heap overflow.\n\n**What to do:** Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelssize-overflow",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "memory-safety",
+                  "external/cwe/cwe-190",
+                  "external/cwe/cwe-787"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "190",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "787",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.slack",
+              "name": "PixelsSlack",
+              "shortDescription": {
+                "text": "Data after the last pixel"
+              },
+              "fullDescription": {
+                "text": "Pixel Data is longer than the image the header describes. Viewers that honour the header never display the extra bytes, while lenient decoders (pydicom among them) return them as extra frames: hidden data, or a hidden image. Severity rises with size, entropy and recognised content."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "Pixel Data is longer than the image the header describes. Viewers that honour the header never display the extra bytes, while lenient decoders (pydicom among them) return them as extra frames: hidden data, or a hidden image. Severity rises with size, entropy and recognised content.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelsslack",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-514",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "514",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "pixels.truncated",
+              "name": "PixelsTruncated",
+              "shortDescription": {
+                "text": "Pixel Data shorter than the image it describes"
+              },
+              "fullDescription": {
+                "text": "Decoders that trust the header read past the end of the pixel buffer."
+              },
+              "help": {
+                "text": "Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident.",
+                "markdown": "Decoders that trust the header read past the end of the pixel buffer.\n\n**What to do:** Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#pixelstruncated",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "memory-safety",
+                  "external/cwe/cwe-130",
+                  "external/cwe/cwe-125"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "130",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "125",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.archive",
+              "name": "PreambleArchive",
+              "shortDescription": {
+                "text": "7z or RAR archive header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Archive tools that identify files by their first bytes open it as an archive."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Archive tools that identify files by their first bytes open it as an archive.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblearchive",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.elf-polyglot",
+              "name": "PreambleElfPolyglot",
+              "shortDescription": {
+                "text": "ELF executable header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. An ELF header needs only its magic at byte 0, so the file runs on Linux-based devices while remaining a valid image (ELFDICOM)."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. An ELF header needs only its magic at byte 0, so the file runs on Linux-based devices while remaining a valid image (ELFDICOM).\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://www.praetorian.com/blog/elfdicom-poc-malware-polyglot-exploiting-linux-based-medical-devices/>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preambleelf-polyglot",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.fat-or-class",
+              "name": "PreambleFatOrClass",
+              "shortDescription": {
+                "text": "Mach-O universal binary or Java class header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Both formats start with CA FE BA BE; either makes the file loadable as code."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Both formats start with CA FE BA BE; either makes the file loadable as code.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblefat-or-class",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.macho-polyglot",
+              "name": "PreambleMachoPolyglot",
+              "shortDescription": {
+                "text": "Mach-O executable header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. The file can be loaded as a macOS executable while remaining a valid image."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. The file can be loaded as a macOS executable while remaining a valid image.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblemacho-polyglot",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.markup",
+              "name": "PreambleMarkup",
+              "shortDescription": {
+                "text": "HTML, XML or SVG markup in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Browsers and content sniffers treat the file as markup, which runs script (HTML, SVG) when the file is opened or served from a web context."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Browsers and content sniffers treat the file as markup, which runs script (HTML, SVG) when the file is opened or served from a web context.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblemarkup",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.mz-header",
+              "name": "PreambleMzHeader",
+              "shortDescription": {
+                "text": "DOS/PE header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The preamble starts with an MZ header, but e_lfanew does not point at a PE signature, so the file is not runnable as it stands. No imaging software writes MZ into the preamble: this is usually a truncated or staged PE/DICOM polyglot."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The preamble starts with an MZ header, but e_lfanew does not point at a PE signature, so the file is not runnable as it stands. No imaging software writes MZ into the preamble: this is usually a truncated or staged PE/DICOM polyglot.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblemz-header",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.nonstandard",
+              "name": "PreambleNonstandard",
+              "shortDescription": {
+                "text": "Unrecognised non-zero preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, but nearly all software writes zeros or a TIFF header. Unrecognised content is not evidence of an attack on its own; it is worth identifying because it is what other programs see first."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, but nearly all software writes zeros or a TIFF header. Unrecognised content is not evidence of an attack on its own; it is worth identifying because it is what other programs see first.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part10/chapter_7.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblenonstandard",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data"
+                ],
+                "precision": "medium",
+                "security-severity": "2.0"
+              }
+            },
+            {
+              "id": "preamble.ole",
+              "name": "PreambleOle",
+              "shortDescription": {
+                "text": "OLE compound file header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. The format of MSI installers and legacy Office documents, both of which can carry code."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. The format of MSI installers and legacy Office documents, both of which can carry code.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preambleole",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.pdf",
+              "name": "PreamblePdf",
+              "shortDescription": {
+                "text": "PDF header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. PDF readers accept a header anywhere in the first kilobyte, so the file also opens as a document."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. PDF readers accept a header anywhere in the first kilobyte, so the file also opens as a document.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblepdf",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.pe-polyglot",
+              "name": "PreamblePePolyglot",
+              "shortDescription": {
+                "text": "Windows executable in the preamble (PE/DICOM polyglot)"
+              },
+              "fullDescription": {
+                "text": "The preamble starts with an MZ header whose e_lfanew field points at a real PE signature further into the file, so the same bytes are a valid image and a runnable Windows program (CVE-2019-11687). Viewers display it normally, and because it is \"just a scan\" it often escapes malware inspection."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The preamble starts with an MZ header whose e_lfanew field points at a real PE signature further into the file, so the same bytes are a valid image and a runnable Windows program (CVE-2019-11687). Viewers display it normally, and because it is \"just a scan\" it often escapes malware inspection.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblepe-polyglot",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.rtf",
+              "name": "PreambleRtf",
+              "shortDescription": {
+                "text": "RTF header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Word processors open the file as an RTF document, a format with a long history of exploited parser bugs."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Word processors open the file as an RTF document, a format with a long history of exploited parser bugs.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblertf",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.shebang",
+              "name": "PreambleShebang",
+              "shortDescription": {
+                "text": "Script interpreter line in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. A file that starts with #!/ runs as a script on Unix-like systems once it is marked executable."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. A file that starts with #!/ runs as a script on Unix-like systems once it is marked executable.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preambleshebang",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "preamble.zip",
+              "name": "PreambleZip",
+              "shortDescription": {
+                "text": "ZIP container header in the preamble"
+              },
+              "fullDescription": {
+                "text": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Tools that identify files by their first bytes treat it as a ZIP-based container (JAR, APK, Office)."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "The 128-byte preamble is the first thing any non-DICOM program reads, and PS3.10 leaves it free for application use, so it can make one file two formats at once. Tools that identify files by their first bytes treat it as a ZIP-based container (JAR, APK, Office).\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.\n\n**References:**\n- <https://nvd.nist.gov/vuln/detail/CVE-2019-11687>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#preamblezip",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "private.analysis-incomplete",
+              "name": "PrivateAnalysisIncomplete",
+              "shortDescription": {
+                "text": "Compressed private data built to exhaust analysis"
+              },
+              "fullDescription": {
+                "text": "The decompressed content of a private value floods the signature search with decoys, so part of it could not be inspected."
+              },
+              "help": {
+                "text": "Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile.",
+                "markdown": "The decompressed content of a private value floods the signature search with decoys, so part of it could not be inspected.\n\n**What to do:** Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privateanalysis-incomplete",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "incomplete"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              }
+            },
+            {
+              "id": "private.compressed-payload",
+              "name": "PrivateCompressedPayload",
+              "shortDescription": {
+                "text": "File hidden inside compressed private data"
+              },
+              "fullDescription": {
+                "text": "A zlib or gzip private value decompresses to data containing a recognised file format. Compression hides it from any signature search of the file itself."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "A zlib or gzip private value decompresses to data containing a recognised file format. Compression hides it from any signature search of the file itself.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privatecompressed-payload",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506"
+                ],
+                "precision": "high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "private.creator-invalid",
+              "name": "PrivateCreatorInvalid",
+              "shortDescription": {
+                "text": "Malformed Private Creator"
+              },
+              "fullDescription": {
+                "text": "A Private Creator is empty, not LO, too long or contains control characters, so readers that match creators by name cannot recognise the block."
+              },
+              "help": {
+                "text": "Usually a buggy or non-conforming writer rather than an attack. Note the producing software (Implementation Class UID and Version Name in the File Meta Information) and report the defect to its vendor if it recurs.",
+                "markdown": "A Private Creator is empty, not LO, too long or contains control characters, so readers that match creators by name cannot recognise the block.\n\n**What to do:** Usually a buggy or non-conforming writer rather than an attack. Note the producing software (Implementation Class UID and Version Name in the File Meta Information) and report the defect to its vendor if it recurs.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_7.8.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privatecreator-invalid",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "conformance"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              }
+            },
+            {
+              "id": "private.data-after-stream",
+              "name": "PrivateDataAfterStream",
+              "shortDescription": {
+                "text": "Data hidden after a compressed stream"
+              },
+              "fullDescription": {
+                "text": "Bytes follow the end of a compressed private value. Decompressors stop at the end of the stream, so nothing that reads the value normally sees them."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "Bytes follow the end of a compressed private value. Decompressors stop at the end of the stream, so nothing that reads the value normally sees them.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privatedata-after-stream",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-514"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "514",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "private.decompression-bomb",
+              "name": "PrivateDecompressionBomb",
+              "shortDescription": {
+                "text": "Compressed private data too large to inspect"
+              },
+              "fullDescription": {
+                "text": "A compressed private value expands more than 1000:1, past the per-value limit or past the per-file budget. That is a decompression bomb aimed at tools that inflate private data, or data built to exceed analysis budgets; the part that was not inspected is not reported clean."
+              },
+              "help": {
+                "text": "The file is built to exhaust the resources of software that processes it. Quarantine it, and check whether any system that ingested it (PACS, router, AI pipeline) slowed down or failed.",
+                "markdown": "A compressed private value expands more than 1000:1, past the per-value limit or past the per-file budget. That is a decompression bomb aimed at tools that inflate private data, or data built to exceed analysis budgets; the part that was not inspected is not reported clean.\n\n**What to do:** The file is built to exhaust the resources of software that processes it. Quarantine it, and check whether any system that ingested it (PACS, router, AI pipeline) slowed down or failed."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privatedecompression-bomb",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "resource",
+                  "external/cwe/cwe-409"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "409",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "private.duplicate-creator",
+              "name": "PrivateDuplicateCreator",
+              "shortDescription": {
+                "text": "Private Creator reserves two blocks"
+              },
+              "fullDescription": {
+                "text": "One creator name reserves two blocks of the same group; readers that look a creator up by name find one block or the other."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "One creator name reserves two blocks of the same group; readers that look a creator up by name find one block or the other.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_7.8.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privateduplicate-creator",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "private.illegal-group",
+              "name": "PrivateIllegalGroup",
+              "shortDescription": {
+                "text": "Private element in a forbidden group"
+              },
+              "fullDescription": {
+                "text": "Groups 0001, 0003, 0005, 0007 and FFFF may not carry private data (PS3.5 7.8.1); readers disagree on whether such elements are standard or private."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Groups 0001, 0003, 0005, 0007 and FFFF may not carry private data (PS3.5 7.8.1); readers disagree on whether such elements are standard or private.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_7.8.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privateillegal-group",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "private.opaque-blob",
+              "name": "PrivateOpaqueBlob",
+              "shortDescription": {
+                "text": "High-entropy private data of unknown format"
+              },
+              "fullDescription": {
+                "text": "At least 4 KiB of private binary data at 7.5 bits/byte or more that matches no known format: that is how encrypted or compressed data looks, and nothing in the file explains it. Vendors do store proprietary compressed data, so this is a lead for review rather than proof."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "At least 4 KiB of private binary data at 7.5 bits/byte or more that matches no known format: that is how encrypted or compressed data looks, and nothing in the file explains it. Vendors do store proprietary compressed data, so this is a lead for review rather than proof.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privateopaque-blob",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data"
+                ],
+                "precision": "medium",
+                "security-severity": "5.5"
+              }
+            },
+            {
+              "id": "private.orphan-element",
+              "name": "PrivateOrphanElement",
+              "shortDescription": {
+                "text": "Private data with no creator"
+              },
+              "fullDescription": {
+                "text": "No Private Creator reserves the block this element sits in, so no software can attribute it and every tool ignores it."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "No Private Creator reserves the block this element sits in, so no software can attribute it and every tool ignores it.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_7.8.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privateorphan-element",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-514"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "514",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "private.unusable-element",
+              "name": "PrivateUnusableElement",
+              "shortDescription": {
+                "text": "Private element outside any reservable block"
+              },
+              "fullDescription": {
+                "text": "Only Private Creators (gggg,0010-00FF) and private data elements (gggg,1000-FFFF) are defined, so no reader can interpret an element elsewhere in a private group, and every reader skips it."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "Only Private Creators (gggg,0010-00FF) and private data elements (gggg,1000-FFFF) are defined, so no reader can interpret an element elsewhere in a private group, and every reader skips it.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part05/sect_7.8.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#privateunusable-element",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-514"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "514",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "scan.findings-suppressed",
+              "name": "ScanFindingsSuppressed",
+              "shortDescription": {
+                "text": "Finding flood suppressed"
+              },
+              "fullDescription": {
+                "text": "One file produced more findings for one rule than the per-rule cap; the first ones are kept and the rest are counted. A file that trips the same rule thousands of times is usually built to flood the report."
+              },
+              "help": {
+                "text": "Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile.",
+                "markdown": "One file produced more findings for one rule than the per-rule cap; the first ones are kept and the rest are counted. A file that trips the same rule thousands of times is usually built to flood the report.\n\n**What to do:** Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#scanfindings-suppressed",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "incomplete"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              }
+            },
+            {
+              "id": "structure.analysis-incomplete",
+              "name": "StructureAnalysisIncomplete",
+              "shortDescription": {
+                "text": "Part of the file was not inspected"
+              },
+              "fullDescription": {
+                "text": "A carving budget was reached. Either the file is larger than the inspection window (low), or it holds a flood of decoy signatures built to exhaust analysis (high). The range that was not inspected is reported, so it is never mistaken for clean."
+              },
+              "help": {
+                "text": "Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile.",
+                "markdown": "A carving budget was reached. Either the file is larger than the inspection window (low), or it holds a flood of decoy signatures built to exhaust analysis (high). The range that was not inspected is reported, so it is never mistaken for clean.\n\n**What to do:** Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureanalysis-incomplete",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "incomplete"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              }
+            },
+            {
+              "id": "structure.bad-fragment-item",
+              "name": "StructureBadFragmentItem",
+              "shortDescription": {
+                "text": "Corrupt pixel data fragment"
+              },
+              "fullDescription": {
+                "text": "Frame decoders resynchronise differently."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Frame decoders resynchronise differently.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurebad-fragment-item",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.bad-offset-table",
+              "name": "StructureBadOffsetTable",
+              "shortDescription": {
+                "text": "Basic Offset Table points outside the fragments"
+              },
+              "fullDescription": {
+                "text": "Decoders that seek frames through the table read the wrong bytes."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Decoders that seek frames through the table read the wrong bytes.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurebad-offset-table",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.bad-sequence-item",
+              "name": "StructureBadSequenceItem",
+              "shortDescription": {
+                "text": "Corrupt sequence"
+              },
+              "fullDescription": {
+                "text": "Different DICOM readers will interpret these bytes differently."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Different DICOM readers will interpret these bytes differently.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurebad-sequence-item",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.deflate-bomb",
+              "name": "StructureDeflateBomb",
+              "shortDescription": {
+                "text": "Decompression bomb"
+              },
+              "fullDescription": {
+                "text": "The deflated dataset expands far beyond any real image."
+              },
+              "help": {
+                "text": "The file is built to exhaust the resources of software that processes it. Quarantine it, and check whether any system that ingested it (PACS, router, AI pipeline) slowed down or failed.",
+                "markdown": "The deflated dataset expands far beyond any real image.\n\n**What to do:** The file is built to exhaust the resources of software that processes it. Quarantine it, and check whether any system that ingested it (PACS, router, AI pipeline) slowed down or failed."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuredeflate-bomb",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "resource",
+                  "external/cwe/cwe-409"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "409",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.deflate-error",
+              "name": "StructureDeflateError",
+              "shortDescription": {
+                "text": "Corrupt deflate stream"
+              },
+              "fullDescription": {
+                "text": "The dataset cannot be decoded."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "The dataset cannot be decoded.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuredeflate-error",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.deflate-truncated",
+              "name": "StructureDeflateTruncated",
+              "shortDescription": {
+                "text": "Truncated deflate stream"
+              },
+              "fullDescription": {
+                "text": "Readers recover different amounts of the dataset."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers recover different amounts of the dataset.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuredeflate-truncated",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.delimiter-length",
+              "name": "StructureDelimiterLength",
+              "shortDescription": {
+                "text": "Delimiter with non-zero length"
+              },
+              "fullDescription": {
+                "text": "Readers that honour the length skip extra bytes."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers that honour the length skip extra bytes.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuredelimiter-length",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.duplicate-tag",
+              "name": "StructureDuplicateTag",
+              "shortDescription": {
+                "text": "Duplicate attribute"
+              },
+              "fullDescription": {
+                "text": "Readers keep either the first or the last copy, so different software sees different values."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers keep either the first or the last copy, so different software sees different values.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureduplicate-tag",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.element-limit",
+              "name": "StructureElementLimit",
+              "shortDescription": {
+                "text": "Too many elements"
+              },
+              "fullDescription": {
+                "text": "Element floods exhaust memory in parsers that build a full object tree."
+              },
+              "help": {
+                "text": "The file is built to exhaust the resources of software that processes it. Quarantine it, and check whether any system that ingested it (PACS, router, AI pipeline) slowed down or failed.",
+                "markdown": "Element floods exhaust memory in parsers that build a full object tree.\n\n**What to do:** The file is built to exhaust the resources of software that processes it. Quarantine it, and check whether any system that ingested it (PACS, router, AI pipeline) slowed down or failed."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureelement-limit",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "resource",
+                  "external/cwe/cwe-770"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "770",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.group-length-mismatch",
+              "name": "StructureGroupLengthMismatch",
+              "shortDescription": {
+                "text": "Group length is wrong"
+              },
+              "fullDescription": {
+                "text": "Readers that use group lengths to skip groups will skip a different range of bytes."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers that use group lengths to skip groups will skip a different range of bytes.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuregroup-length-mismatch",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436",
+                  "external/cwe/cwe-130"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "130",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.hidden-payload",
+              "name": "StructureHiddenPayload",
+              "shortDescription": {
+                "text": "File hidden outside the DICOM structure"
+              },
+              "fullDescription": {
+                "text": "Bytes the DICOM structure cannot account for contain a recognised file format, typically an executable appended after the dataset or left behind a broken element. DICOM readers never display these bytes; other programs can run or extract them. High rather than critical when the payload is an archive, a script or a document rather than an executable."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "Bytes the DICOM structure cannot account for contain a recognised file format, typically an executable appended after the dataset or left behind a broken element. DICOM readers never display these bytes; other programs can run or extract them. High rather than critical when the payload is an archive, a script or a document rather than an executable.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurehidden-payload",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506"
+                ],
+                "precision": "high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.invalid-vr",
+              "name": "StructureInvalidVr",
+              "shortDescription": {
+                "text": "Invalid VR"
+              },
+              "fullDescription": {
+                "text": "Compliant parsers stop or desynchronise here, so nothing after it is visible to them."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Compliant parsers stop or desynchronise here, so nothing after it is visible to them.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureinvalid-vr",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.length-overflow",
+              "name": "StructureLengthOverflow",
+              "shortDescription": {
+                "text": "Declared length exceeds its container"
+              },
+              "fullDescription": {
+                "text": "Decoders that trust declared lengths read past the end of their buffer, the trigger for a long line of DICOM viewer memory-safety bugs."
+              },
+              "help": {
+                "text": "Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident.",
+                "markdown": "Decoders that trust declared lengths read past the end of their buffer, the trigger for a long line of DICOM viewer memory-safety bugs.\n\n**What to do:** Open the file only with current, sandboxed decoders: this is the input class behind decoder memory-safety bugs. Quarantine it and trace its source, because crafted headers like this rarely occur by accident."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurelength-overflow",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "memory-safety",
+                  "external/cwe/cwe-130",
+                  "external/cwe/cwe-125"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "130",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "125",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.max-depth",
+              "name": "StructureMaxDepth",
+              "shortDescription": {
+                "text": "Sequences nested too deeply"
+              },
+              "fullDescription": {
+                "text": "Recursive parsers can be driven to stack exhaustion (denial of service)."
+              },
+              "help": {
+                "text": "The file is built to exhaust the resources of software that processes it. Quarantine it, and check whether any system that ingested it (PACS, router, AI pipeline) slowed down or failed.",
+                "markdown": "Recursive parsers can be driven to stack exhaustion (denial of service).\n\n**What to do:** The file is built to exhaust the resources of software that processes it. Quarantine it, and check whether any system that ingested it (PACS, router, AI pipeline) slowed down or failed."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuremax-depth",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "resource",
+                  "external/cwe/cwe-674"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "674",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.meta-group-length-mismatch",
+              "name": "StructureMetaGroupLengthMismatch",
+              "shortDescription": {
+                "text": "File Meta group length is wrong"
+              },
+              "fullDescription": {
+                "text": "Readers that trust the length and readers that scan by group disagree on where the dataset, and its transfer syntax, begins."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers that trust the length and readers that scan by group disagree on where the dataset, and its transfer syntax, begins.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuremeta-group-length-mismatch",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436",
+                  "external/cwe/cwe-130"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                },
+                {
+                  "target": {
+                    "id": "130",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.missing-item-delimiter",
+              "name": "StructureMissingItemDelimiter",
+              "shortDescription": {
+                "text": "Unterminated item"
+              },
+              "fullDescription": {
+                "text": "Readers disagree about where the item ends."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers disagree about where the item ends.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuremissing-item-delimiter",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.missing-meta-group-length",
+              "name": "StructureMissingMetaGroupLength",
+              "shortDescription": {
+                "text": "File Meta group length missing"
+              },
+              "fullDescription": {
+                "text": "Required by PS3.10; some readers mis-locate the dataset without it."
+              },
+              "help": {
+                "text": "Usually a buggy or non-conforming writer rather than an attack. Note the producing software (Implementation Class UID and Version Name in the File Meta Information) and report the defect to its vendor if it recurs.",
+                "markdown": "Required by PS3.10; some readers mis-locate the dataset without it.\n\n**What to do:** Usually a buggy or non-conforming writer rather than an attack. Note the producing software (Implementation Class UID and Version Name in the File Meta Information) and report the defect to its vendor if it recurs."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuremissing-meta-group-length",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "conformance"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              }
+            },
+            {
+              "id": "structure.missing-sequence-delimiter",
+              "name": "StructureMissingSequenceDelimiter",
+              "shortDescription": {
+                "text": "Unterminated sequence"
+              },
+              "fullDescription": {
+                "text": "Readers disagree about where the sequence ends."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers disagree about where the sequence ends.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuremissing-sequence-delimiter",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.missing-transfer-syntax",
+              "name": "StructureMissingTransferSyntax",
+              "shortDescription": {
+                "text": "No transfer syntax"
+              },
+              "fullDescription": {
+                "text": "Readers must guess how the dataset is encoded."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers must guess how the dataset is encoded.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuremissing-transfer-syntax",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.no-part10-header",
+              "name": "StructureNoPart10Header",
+              "shortDescription": {
+                "text": "No DICOM Part 10 header"
+              },
+              "fullDescription": {
+                "text": "Strict readers reject the file but lenient ones (pydicom's force mode, many toolkits) read it, so tools that only look for the DICM marker skip it entirely."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Strict readers reject the file but lenient ones (pydicom's force mode, many toolkits) read it, so tools that only look for the DICM marker skip it entirely.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureno-part10-header",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.nonzero-padding",
+              "name": "StructureNonzeroPadding",
+              "shortDescription": {
+                "text": "Data hidden in trailing padding"
+              },
+              "fullDescription": {
+                "text": "(FFFC,FFFC) Data Set Trailing Padding has no meaning (PS3.10 7.2) and readers skip it unread, so non-zero content in it is invisible to every DICOM tool. High or critical when it contains a recognised file."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "(FFFC,FFFC) Data Set Trailing Padding has no meaning (PS3.10 7.2) and readers skip it unread, so non-zero content in it is invisible to every DICOM tool. High or critical when it contains a recognised file.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.\n\n**References:**\n- <https://dicom.nema.org/medical/dicom/current/output/chtml/part10/chapter_7.html>"
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurenonzero-padding",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-514"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "514",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.odd-length",
+              "name": "StructureOddLength",
+              "shortDescription": {
+                "text": "Odd value length"
+              },
+              "fullDescription": {
+                "text": "PS3.5 requires even lengths; different DICOM readers will interpret these bytes differently."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "PS3.5 requires even lengths; different DICOM readers will interpret these bytes differently.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureodd-length",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.reserved-nonzero",
+              "name": "StructureReservedNonzero",
+              "shortDescription": {
+                "text": "Reserved header bytes are not zero"
+              },
+              "fullDescription": {
+                "text": "A covert channel that strict readers reject."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "A covert channel that strict readers reject.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurereserved-nonzero",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-514"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "514",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.stray-delimiter",
+              "name": "StructureStrayDelimiter",
+              "shortDescription": {
+                "text": "Delimiter outside its structure"
+              },
+              "fullDescription": {
+                "text": "Different DICOM readers will interpret these bytes differently."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Different DICOM readers will interpret these bytes differently.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurestray-delimiter",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.suppressed",
+              "name": "StructureSuppressed",
+              "shortDescription": {
+                "text": "Anomaly flood"
+              },
+              "fullDescription": {
+                "text": "A file that trips the same rule thousands of times is built to flood analysis; only the first occurrences are reported."
+              },
+              "help": {
+                "text": "Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile.",
+                "markdown": "A file that trips the same rule thousands of times is built to flood analysis; only the first occurrences are reported.\n\n**What to do:** Part of the file was not inspected, so the verdict for it is partial. Inspect the reported range with other tools. A file that deliberately exhausts analysis budgets should be treated as hostile."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuresuppressed",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "incomplete"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              }
+            },
+            {
+              "id": "structure.tag-order",
+              "name": "StructureTagOrder",
+              "shortDescription": {
+                "text": "Attributes out of order"
+              },
+              "fullDescription": {
+                "text": "Readers that stop early or search by tag will miss attributes that others see."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers that stop early or search by tag will miss attributes that others see.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuretag-order",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.transfer-syntax-mismatch",
+              "name": "StructureTransferSyntaxMismatch",
+              "shortDescription": {
+                "text": "Transfer syntax does not match the encoding"
+              },
+              "fullDescription": {
+                "text": "Lenient readers silently switch encodings and strict ones fail, so the same file decodes differently depending on the software."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Lenient readers silently switch encodings and strict ones fail, so the same file decodes differently depending on the software.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuretransfer-syntax-mismatch",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.truncated-header",
+              "name": "StructureTruncatedHeader",
+              "shortDescription": {
+                "text": "File ends mid-element"
+              },
+              "fullDescription": {
+                "text": "Usually an interrupted transfer."
+              },
+              "help": {
+                "text": "Usually a buggy or non-conforming writer rather than an attack. Note the producing software (Implementation Class UID and Version Name in the File Meta Information) and report the defect to its vendor if it recurs.",
+                "markdown": "Usually an interrupted transfer.\n\n**What to do:** Usually a buggy or non-conforming writer rather than an attack. Note the producing software (Implementation Class UID and Version Name in the File Meta Information) and report the defect to its vendor if it recurs."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structuretruncated-header",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "conformance"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              }
+            },
+            {
+              "id": "structure.undefined-fragment-length",
+              "name": "StructureUndefinedFragmentLength",
+              "shortDescription": {
+                "text": "Pixel data fragment with undefined length"
+              },
+              "fullDescription": {
+                "text": "Not allowed; decoders cannot find the fragment's end."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Not allowed; decoders cannot find the fragment's end.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureundefined-fragment-length",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.undefined-length-invalid",
+              "name": "StructureUndefinedLengthInvalid",
+              "shortDescription": {
+                "text": "Undefined length on a non-sequence attribute"
+              },
+              "fullDescription": {
+                "text": "Readers have no way to find where the value ends."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers have no way to find where the value ends.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureundefined-length-invalid",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.unexpected-delimiter",
+              "name": "StructureUnexpectedDelimiter",
+              "shortDescription": {
+                "text": "Sequence delimiter inside a defined-length sequence"
+              },
+              "fullDescription": {
+                "text": "Readers that honour the delimiter end the sequence early."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers that honour the delimiter end the sequence early.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureunexpected-delimiter",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.unexplained-bytes",
+              "name": "StructureUnexplainedBytes",
+              "shortDescription": {
+                "text": "Bytes not accounted for by the DICOM structure"
+              },
+              "fullDescription": {
+                "text": "Every byte of a conforming file belongs to the preamble, the magic, an element header or a value. These bytes belong to none of them, so no reader displays them. Severity grows with size: low under 16 bytes, medium under 1 KiB, high above."
+              },
+              "help": {
+                "text": "Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden.",
+                "markdown": "Every byte of a conforming file belongs to the preamble, the magic, an element header or a value. These bytes belong to none of them, so no reader displays them. Severity grows with size: low under 16 bytes, medium under 1 KiB, high above.\n\n**What to do:** Extract the bytes at the reported offset (`radguard map` shows the file's layout) and identify them. Conforming software never stores data where readers do not look, so the content is either a writer bug or deliberately hidden."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureunexplained-bytes",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "hidden-data",
+                  "external/cwe/cwe-514"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "514",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.unknown-transfer-syntax",
+              "name": "StructureUnknownTransferSyntax",
+              "shortDescription": {
+                "text": "Non-standard transfer syntax"
+              },
+              "fullDescription": {
+                "text": "Most software cannot decode it; may indicate a private or crafted encoding."
+              },
+              "help": {
+                "text": "Usually a buggy or non-conforming writer rather than an attack. Note the producing software (Implementation Class UID and Version Name in the File Meta Information) and report the defect to its vendor if it recurs.",
+                "markdown": "Most software cannot decode it; may indicate a private or crafted encoding.\n\n**What to do:** Usually a buggy or non-conforming writer rather than an attack. Note the producing software (Implementation Class UID and Version Name in the File Meta Information) and report the defect to its vendor if it recurs."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureunknown-transfer-syntax",
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "conformance"
+                ],
+                "precision": "very-high",
+                "security-severity": "2.0"
+              }
+            },
+            {
+              "id": "structure.unterminated-pixel-data",
+              "name": "StructureUnterminatedPixelData",
+              "shortDescription": {
+                "text": "Encapsulated pixel data not terminated"
+              },
+              "fullDescription": {
+                "text": "Decoders disagree about where the last frame ends."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Decoders disagree about where the last frame ends.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structureunterminated-pixel-data",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.vr-length-mismatch",
+              "name": "StructureVrLengthMismatch",
+              "shortDescription": {
+                "text": "Value length does not fit its VR"
+              },
+              "fullDescription": {
+                "text": "Readers disagree on how many values there are and may read partial values."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Readers disagree on how many values there are and may read partial values.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurevr-length-mismatch",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "structure.vr-mismatch",
+              "name": "StructureVrMismatch",
+              "shortDescription": {
+                "text": "Attribute encoded with the wrong VR"
+              },
+              "fullDescription": {
+                "text": "Dictionary-driven and header-driven readers decode different values from the same bytes."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "Dictionary-driven and header-driven readers decode different values from the same bytes.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#structurevr-mismatch",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "values.document-payload",
+              "name": "ValuesDocumentPayload",
+              "shortDescription": {
+                "text": "Executable inside an encapsulated document"
+              },
+              "fullDescription": {
+                "text": "An Encapsulated Document (0042,0011), meant to hold a PDF, CDA or similar report, contains an executable."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "An Encapsulated Document (0042,0011), meant to hold a PDF, CDA or similar report, contains an executable.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#valuesdocument-payload",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506"
+                ],
+                "precision": "very-high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "values.document-type-mismatch",
+              "name": "ValuesDocumentTypeMismatch",
+              "shortDescription": {
+                "text": "Encapsulated document is not what it claims"
+              },
+              "fullDescription": {
+                "text": "The declared MIME type and the content disagree: software that trusts the declared type and software that sniffs the content handle the document differently."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "The declared MIME type and the content disagree: software that trusts the declared type and software that sniffs the content handle the document differently.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#valuesdocument-type-mismatch",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "high",
+                "security-severity": "8.0"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "values.document-type-missing",
+              "name": "ValuesDocumentTypeMissing",
+              "shortDescription": {
+                "text": "Encapsulated document without a MIME type"
+              },
+              "fullDescription": {
+                "text": "The document has no MIME Type of Encapsulated Document (0042,0012), so viewers must guess how to open it."
+              },
+              "help": {
+                "text": "Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again.",
+                "markdown": "The document has no MIME Type of Encapsulated Document (0042,0012), so viewers must guess how to open it.\n\n**What to do:** Different DICOM software can read this file differently, so no single viewer's rendering can be trusted. Compare what the viewer, the PACS and any AI pipeline actually show; to normalise the study, re-acquire it from the source, or rewrite it with a strict toolkit and scan it again."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#valuesdocument-type-missing",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "differential",
+                  "external/cwe/cwe-436"
+                ],
+                "precision": "very-high",
+                "security-severity": "5.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "436",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "values.embedded-file",
+              "name": "ValuesEmbeddedFile",
+              "shortDescription": {
+                "text": "File embedded in an attribute value"
+              },
+              "fullDescription": {
+                "text": "A recognised file format sits inside an attribute value: a private blob, an unknown-VR value, an item deep in a sequence. Executables have no business in any attribute (critical), scripts are high and archives medium; documents and markup are routine vendor practice and reported as low for review."
+              },
+              "help": {
+                "text": "Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence.",
+                "markdown": "A recognised file format sits inside an attribute value: a private blob, an unknown-VR value, an item deep in a sequence. Executables have no business in any attribute (critical), scripts are high and archives medium; documents and markup are routine vendor practice and reported as low for review.\n\n**What to do:** Quarantine the file and keep it away from anything that could run or extract the embedded content. Extract the payload at the reported offset for malware analysis, find out how the file entered the archive, and check other files from the same source. Re-saving the file in a viewer is not a fix: it may keep the payload, and it destroys evidence."
+              },
+              "helpUri": "https://github.com/Aahil-Riyaz/radguard/blob/main/docs/rules.md#valuesembedded-file",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "malware",
+                  "external/cwe/cwe-506"
+                ],
+                "precision": "high",
+                "security-severity": "9.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "506",
+                    "toolComponent": {
+                      "name": "CWE",
+                      "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+                    }
+                  },
+                  "kinds": [
+                    "relevant"
+                  ]
+                }
+              ]
+            }
+          ],
+          "notifications": [
+            {
+              "id": "scan.path-error",
+              "name": "ScanPathError",
+              "shortDescription": {
+                "text": "A path could not be examined"
+              },
+              "fullDescription": {
+                "text": "A file or directory could not be read, or a check failed on it. The scan is incomplete: the absence of results for this path is not evidence that it is clean."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "scan.path-skipped",
+              "name": "ScanPathSkipped",
+              "shortDescription": {
+                "text": "A path was deliberately not examined"
+              },
+              "fullDescription": {
+                "text": "For example a symbolic link to a directory, which is not followed."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              }
+            },
+            {
+              "id": "sarif.results-omitted",
+              "name": "SarifResultsOmitted",
+              "shortDescription": {
+                "text": "Least severe results omitted"
+              },
+              "fullDescription": {
+                "text": "GitHub code scanning rejects a run with more than 25,000 results, so the most severe ones were kept. The JSON report lists every finding."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            }
+          ],
+          "supportedTaxonomies": [
+            {
+              "name": "CWE",
+              "guid": "ec480a2c-8267-5d90-affc-401687cd64b0"
+            }
+          ]
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "startTimeUtc": "2026-10-08T20:48:26.925Z",
+          "endTimeUtc": "2026-10-08T20:48:26.930Z",
+          "toolExecutionNotifications": [],
+          "exitCode": 1
+        }
+      ],
+      "originalUriBaseIds": {
+        "%SRCROOT%": {
+          "description": {
+            "text": "The directory RadGuard was run from. Relative URIs resolve against it; for GitHub code scanning, run RadGuard from the repository root."
+          }
+        }
+      },
+      "artifacts": [
+        {
+          "location": {
+            "uri": "examples/appended-executable.dcm",
+            "uriBaseId": "%SRCROOT%"
+          },
+          "length": 17294,
+          "mimeType": "application/dicom",
+          "hashes": {
+            "sha-256": "6f08a87989973a227e55b2d49edb2f13724c600d04224b13e55d81ae6d5fee55"
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "location": {
+            "uri": "examples/hidden-frame.dcm",
+            "uriBaseId": "%SRCROOT%"
+          },
+          "length": 33166,
+          "mimeType": "application/dicom",
+          "hashes": {
+            "sha-256": "0e4472b551f0ed54f2f676b1c4ff97372d5ecc7785c8fed327e1427be595aef1"
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "location": {
+            "uri": "examples/preamble-polyglot.dcm",
+            "uriBaseId": "%SRCROOT%"
+          },
+          "length": 16810,
+          "mimeType": "application/dicom",
+          "hashes": {
+            "sha-256": "f7f2de3a10c6cc1cd651e597d128a5bd60d9bbb8cd7f0de8145ef72a370adc3a"
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "location": {
+            "uri": "examples/two-scans-one-file.dcm",
+            "uriBaseId": "%SRCROOT%"
+          },
+          "length": 33178,
+          "mimeType": "application/dicom",
+          "hashes": {
+            "sha-256": "394227ede2a8371f552e9639866922bd5daef8fd60ae4f2db19e18f82509d172"
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        }
+      ],
+      "taxonomies": [
+        {
+          "name": "CWE",
+          "organization": "MITRE",
+          "guid": "ec480a2c-8267-5d90-affc-401687cd64b0",
+          "informationUri": "https://cwe.mitre.org/",
+          "shortDescription": {
+            "text": "The MITRE Common Weakness Enumeration"
+          },
+          "isComprehensive": false,
+          "taxa": [
+            {
+              "id": "125",
+              "name": "Out-of-bounds Read",
+              "shortDescription": {
+                "text": "Out-of-bounds Read"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/125.html"
+            },
+            {
+              "id": "130",
+              "name": "Improper Handling of Length Parameter Inconsistency",
+              "shortDescription": {
+                "text": "Improper Handling of Length Parameter Inconsistency"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/130.html"
+            },
+            {
+              "id": "190",
+              "name": "Integer Overflow or Wraparound",
+              "shortDescription": {
+                "text": "Integer Overflow or Wraparound"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/190.html"
+            },
+            {
+              "id": "409",
+              "name": "Improper Handling of Highly Compressed Data (Data Amplification)",
+              "shortDescription": {
+                "text": "Improper Handling of Highly Compressed Data (Data Amplification)"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/409.html"
+            },
+            {
+              "id": "436",
+              "name": "Interpretation Conflict",
+              "shortDescription": {
+                "text": "Interpretation Conflict"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/436.html"
+            },
+            {
+              "id": "506",
+              "name": "Embedded Malicious Code",
+              "shortDescription": {
+                "text": "Embedded Malicious Code"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/506.html"
+            },
+            {
+              "id": "514",
+              "name": "Covert Channel",
+              "shortDescription": {
+                "text": "Covert Channel"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/514.html"
+            },
+            {
+              "id": "674",
+              "name": "Uncontrolled Recursion",
+              "shortDescription": {
+                "text": "Uncontrolled Recursion"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/674.html"
+            },
+            {
+              "id": "770",
+              "name": "Allocation of Resources Without Limits or Throttling",
+              "shortDescription": {
+                "text": "Allocation of Resources Without Limits or Throttling"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/770.html"
+            },
+            {
+              "id": "787",
+              "name": "Out-of-bounds Write",
+              "shortDescription": {
+                "text": "Out-of-bounds Write"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/787.html"
+            },
+            {
+              "id": "1284",
+              "name": "Improper Validation of Specified Quantity in Input",
+              "shortDescription": {
+                "text": "Improper Validation of Specified Quantity in Input"
+              },
+              "helpUri": "https://cwe.mitre.org/data/definitions/1284.html"
+            }
+          ]
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "structure.hidden-payload",
+          "ruleIndex": 50,
+          "level": "error",
+          "message": {
+            "text": "Windows PE executable hidden in 512 bytes outside the DICOM structure. Bytes 0x418e-0x438e: parsing stopped because (5A4D,0000) has VR bytes 00 00, which is not a VR; contains Windows PE executable at 0x418e (PE header at 0x41ce); first bytes 4d 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00; entropy 0.10 bits/byte; 1% printable. At byte 0x418e of the file"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "examples/appended-executable.dcm",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "byteOffset": 16782
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "radguard/v1": "92806c8802e6f242:1",
+            "primaryLocationLineHash": "92806c8802e6f242:1"
+          },
+          "properties": {
+            "severity": "critical",
+            "offset": 16782,
+            "domain": "file"
+          }
+        },
+        {
+          "ruleId": "preamble.pe-polyglot",
+          "ruleIndex": 24,
+          "level": "error",
+          "message": {
+            "text": "Windows PE executable embedded via preamble (PE/DICOM polyglot). MZ header with PE signature at offset 0x196; the file is laid out as a Windows executable as well as a DICOM image. At byte 0x196 of the file"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "examples/preamble-polyglot.dcm",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 2
+                },
+                "region": {
+                  "byteOffset": 406
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "radguard/v1": "2c99d59fa9b9e82c:1",
+            "primaryLocationLineHash": "2c99d59fa9b9e82c:1"
+          },
+          "properties": {
+            "severity": "critical",
+            "offset": 406,
+            "domain": "file"
+          }
+        },
+        {
+          "ruleId": "pixels.duplicate-pixel-data",
+          "ruleIndex": 4,
+          "level": "error",
+          "message": {
+            "text": "Two images in one file. 2 Pixel Data elements at 0x182, 0x418e. Software that keeps the first copy and software that keeps the last display different images from the same file, so a radiologist's viewer and an AI pipeline can be shown different scans. At byte 0x418e of the file"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "examples/two-scans-one-file.dcm",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 3
+                },
+                "region": {
+                  "byteOffset": 16782
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "radguard/v1": "f1720db184ee9b12:1",
+            "primaryLocationLineHash": "f1720db184ee9b12:1"
+          },
+          "properties": {
+            "severity": "critical",
+            "offset": 16782,
+            "domain": "file"
+          }
+        },
+        {
+          "ruleId": "pixels.slack",
+          "ruleIndex": 13,
+          "level": "error",
+          "message": {
+            "text": "1 hidden frame(s) after the declared image. Pixel Data is 32,768 bytes but 128x128, 1 sample(s), 1 frame(s), 8-bit needs only 16,384. The 16,384 bytes from 0x418e are outside the image the header describes: viewers that honour the header never display them, while lenient decoders return them as extra frames; first bytes 00 01 00 00 00 00 00 05 00 00 01 01 00 00 00 02; entropy 2.81 bits/byte over the first 4,096 bytes; 11% printable. At byte 0x418e of the file"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "examples/hidden-frame.dcm",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 1
+                },
+                "region": {
+                  "byteOffset": 16782
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "radguard/v1": "78b353f1145ebf7c:1",
+            "primaryLocationLineHash": "78b353f1145ebf7c:1"
+          },
+          "properties": {
+            "severity": "high",
+            "offset": 16782,
+            "domain": "file"
+          }
+        },
+        {
+          "ruleId": "private.orphan-element",
+          "ruleIndex": 36,
+          "level": "warning",
+          "message": {
+            "text": "Private data with no creator. (0029,1010) (16 bytes) sits in block 10 of group 0029, but no Private Creator (0029,0010) reserves it; no software can attribute it, so every tool ignores it. At byte 0x182 of the file"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "examples/preamble-polyglot.dcm",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 2
+                },
+                "region": {
+                  "byteOffset": 386
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "radguard/v1": "f971343dd19835ff:1",
+            "primaryLocationLineHash": "f971343dd19835ff:1"
+          },
+          "properties": {
+            "severity": "medium",
+            "offset": 386,
+            "domain": "file"
+          }
+        }
+      ],
+      "properties": {
+        "files": 5,
+        "dicom": 5,
+        "skipped": 0,
+        "complete": true,
+        "resultsOmitted": 0
+      }
+    }
+  ]
+}

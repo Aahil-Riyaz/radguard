@@ -59,15 +59,17 @@ def check(ctx: FileContext) -> Iterator[Finding]:
             yield Finding("pixels.hidden-frames", Severity.HIGH, f"{len(frames) - declared} undeclared frame(s)",
                           f"Pixel Data holds {len(frames)} frames but Number of Frames is {declared}; decoders that "
                           "trust the header show fewer frames than decoders that walk the fragments",
-                          ctx.path, px.offset)
+                          ctx.path, px.offset, domain=domain)
         elif len(frames) < declared:
             yield Finding("pixels.missing-frames", Severity.MEDIUM, "Fewer frames than declared",
-                          f"Number of Frames is {declared} but Pixel Data holds {len(frames)}", ctx.path, px.offset)
+                          f"Number of Frames is {declared} but Pixel Data holds {len(frames)}", ctx.path, px.offset,
+                          domain=domain)
         for number, frags in enumerate(frames, 1):
             size = sum(n for _, n in frags)
             if size > budget:
                 yield Finding("pixels.analysis-incomplete", Severity.LOW, "Frames beyond the inspection budget",
-                              f"frame {number} onwards ({size:,} bytes) was not reassembled", ctx.path, frags[0][0])
+                              f"frame {number} onwards ({size:,} bytes) was not reassembled", ctx.path, frags[0][0],
+                              domain=domain)
                 return
             budget -= size
             yield from _frame(ctx, buf, domain, codec, number, frags)
@@ -112,7 +114,7 @@ def _frame(ctx: FileContext, buf: Buffer, domain: str, codec: str, number: int,
         problem = codecs.rle_problem(data)
         if problem:
             yield Finding("pixels.malformed-codestream", Severity.MEDIUM, "Malformed RLE frame",
-                          f"frame {number}: {problem}", ctx.path, first)
+                          f"frame {number}: {problem}", ctx.path, first, domain=domain)
         return
 
     expected = _FRAME_START[codec]
@@ -122,14 +124,14 @@ def _frame(ctx: FileContext, buf: Buffer, domain: str, codec: str, number: int,
         severity = Severity.CRITICAL if actual and actual.signature.severity is Severity.CRITICAL else Severity.HIGH
         yield Finding("pixels.codec-mismatch", severity, "Frame is not the codec its transfer syntax declares",
                       f"frame {number} should start with {expected.hex(' ')} ({codec}) but is {what}",
-                      ctx.path, first)
+                      ctx.path, first, domain=domain)
         return
 
     end, problem = codecs.j2k_end(data) if codec == "j2k" else codecs.jpeg_end(data, ls=codec == "jpeg-ls")
     if end is None:
         yield Finding("pixels.malformed-codestream", Severity.MEDIUM, "Malformed compressed frame",
                       f"frame {number}: {problem}; malformed codestreams are the input class behind many image "
-                      "decoder memory-safety bugs", ctx.path, first)
+                      "decoder memory-safety bugs", ctx.path, first, domain=domain)
         return
     trailing = data[end:]
     if len(trailing) <= 1 and not any(trailing):  # fragments are even-length: one zero pad byte is legal
@@ -151,7 +153,7 @@ def _frame(ctx: FileContext, buf: Buffer, domain: str, codec: str, number: int,
     detail += "; " + signatures.describe(trailing, 0, len(trailing))  # pragma: no mutate (display)
     title = ("Second image hidden after the end of a frame" if image_at is not None and not hits
              else f"{len(trailing):,} bytes hidden after the end of a compressed frame")
-    yield Finding("pixels.codestream-trailing-data", severity, title, detail, ctx.path, start)
+    yield Finding("pixels.codestream-trailing-data", severity, title, detail, ctx.path, start, domain=domain)
 
 
 def _file_offset(frags: list[tuple[int, int]], relative: int) -> int:

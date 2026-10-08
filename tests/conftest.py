@@ -11,6 +11,8 @@ from hypothesis import settings
 from builder import el, part10
 from radguard.checks import ALL_CHECKS
 from radguard.context import FileContext
+from radguard.findings import FILE, INFLATED
+from radguard.rules import RULES
 
 settings.register_profile("default", max_examples=400)
 settings.register_profile("quick", max_examples=50)  # mutation testing: thousands of suite runs
@@ -35,7 +37,14 @@ def build_pe_polyglot(valid_pe: bool = True) -> bytes:
 def findings_for(data: bytes, prefix: str = "") -> list:
     """Run every check over in-memory bytes and return findings whose id starts with `prefix`."""
     ctx = FileContext("<memory>", data, len(data))
-    return [f for check in ALL_CHECKS for f in check(ctx) if f.check.startswith(prefix)]
+    found = [f for check in ALL_CHECKS for f in check(ctx)]
+    # Every finding any test produces must be described by the rule catalog (tests/test_rules.py).
+    assert {f.check for f in found} <= RULES.keys(), {f.check for f in found} - RULES.keys()
+    # ...and must point inside the bytes its offset counts: the file, or the decompressed dataset.
+    sizes = {FILE: len(data), INFLATED: len(ctx.parsed.inflated) if ctx.parsed.inflated is not None else -1}
+    for f in found:
+        assert f.domain in sizes and (f.offset is None or 0 <= f.offset <= sizes[f.domain]), f
+    return [f for f in found if f.check.startswith(prefix)]
 
 
 @pytest.fixture

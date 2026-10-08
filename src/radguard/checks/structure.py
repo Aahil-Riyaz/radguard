@@ -110,7 +110,7 @@ def check(ctx: FileContext) -> Iterator[Finding]:
         if id(a) not in explained:
             severity, title, why = RULES[a.code]
             yield Finding(f"structure.{a.code}", severity, title,
-                          f"{_where(a.domain)}{a.message}; {why}", ctx.path, a.offset)
+                          f"{_where(a.domain)}{a.message}; {why}", ctx.path, a.offset, domain=a.domain)
 
     for el in parsed.elements:
         if el.tag == TRAILING_PADDING and el.depth == 0:
@@ -137,7 +137,7 @@ def _gap_finding(path: str, buf: Buffer, start: int, end: int, domain: str, caus
         parts.append("contains " + ", ".join(signatures.match_text(m) for m in hits[:5]))  # pragma: no mutate (display)
     parts.append(signatures.describe(buf, start, end))
     detail = f"{_where(domain)}bytes {start:#x}-{end:#x}: " + "; ".join(parts)
-    return Finding(check_id, severity, title, detail, path, start)
+    return Finding(check_id, severity, title, detail, path, start, domain=domain)
 
 
 def _padding(path: str, buf: Buffer, el: Element, hits: list[Match]) -> Iterator[Finding]:
@@ -153,7 +153,7 @@ def _padding(path: str, buf: Buffer, el: Element, hits: list[Match]) -> Iterator
         detail += "; contains " + ", ".join(signatures.match_text(m) for m in hits[:5])  # pragma: no mutate (display)
     detail += "; " + signatures.describe(buf, el.value_offset, el.end)
     yield Finding("structure.nonzero-padding", severity, "Data hidden in trailing padding",
-                  detail, path, el.value_offset)
+                  detail, path, el.value_offset, domain=el.domain)
 
 
 def _incomplete(path: str, domain: str, gap: Exhaustion) -> Finding:
@@ -162,7 +162,7 @@ def _incomplete(path: str, domain: str, gap: Exhaustion) -> Finding:
     return Finding(
         "structure.analysis-incomplete", Severity.HIGH if adversarial else Severity.LOW,
         "File built to exhaust analysis" if adversarial else "File larger than the inspection window",
-        f"{_where(domain)}{gap.detail} (from offset {gap.offset:#x})", path, gap.offset,
+        f"{_where(domain)}{gap.detail} (from offset {gap.offset:#x})", path, gap.offset, domain=domain,
     )
 
 

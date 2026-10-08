@@ -64,7 +64,7 @@ def check(ctx: FileContext) -> Iterator[Finding]:
             yield Finding("private.illegal-group", Severity.MEDIUM, "Private element in a forbidden group",
                           f"{tag_str(el.tag)}: groups 0001, 0003, 0005, 0007 and FFFF may not carry private data "
                           "(PS3.5 7.8.1); readers disagree on whether they are standard or private",
-                          ctx.path, el.offset)
+                          ctx.path, el.offset, domain=el.domain)
         ds = datasets[(el.domain, el.parent)]
         if 0x0010 <= elem <= 0x00FF:
             ds.creators.setdefault((group, elem), el)
@@ -73,7 +73,8 @@ def check(ctx: FileContext) -> Iterator[Finding]:
         elif elem:  # (gggg,0000) is a retired group length; everything else here belongs to no block
             yield Finding("private.unusable-element", Severity.MEDIUM, "Private element outside any reservable block",
                           f"{tag_str(el.tag)}: only (gggg,0010-00FF) creators and (gggg,1000-FFFF) data elements are "
-                          "defined (PS3.5 7.8.1), so no reader can interpret this one", ctx.path, el.offset)
+                          "defined (PS3.5 7.8.1), so no reader can interpret this one", ctx.path, el.offset,
+                          domain=el.domain)
 
     budget = _Budget(INFLATE_PER_FILE)  # read at scan time, so the limit stays configurable
     for (domain, _), ds in datasets.items():
@@ -87,7 +88,7 @@ def check(ctx: FileContext) -> Iterator[Finding]:
                     "private.orphan-element", Severity.MEDIUM, "Private data with no creator",
                     f"{tag_str(el.tag)} ({el.end - el.value_offset:,} bytes) sits in block {block:02X} of group "
                     f"{group:04X}, but no Private Creator ({group:04X},00{block:02X}) reserves it; no software can "
-                    "attribute it, so every tool ignores it", ctx.path, el.offset,
+                    "attribute it, so every tool ignores it", ctx.path, el.offset, domain=el.domain,
                 )
             if el.vr in _BINARY_VRS and el.fragments is None:
                 where = f"{tag_str(el.tag)} [{_name(buf, creator)}]"
@@ -108,13 +109,13 @@ def _creators(path: str, buf: Buffer, ds: _Dataset) -> Iterator[Finding]:
         if problem:
             yield Finding("private.creator-invalid", Severity.LOW, "Malformed Private Creator",
                           f"{tag_str(el.tag)} {problem}; readers that match creators by value cannot recognise the "
-                          "block", path, el.offset)
+                          "block", path, el.offset, domain=el.domain)
         key = (group, value)
         if value and key in seen:
             yield Finding("private.duplicate-creator", Severity.LOW, "Private Creator reserves two blocks",
                           f"{signatures.printable(value)!r} reserves both {tag_str(seen[key].tag)} and "
                           f"{tag_str(el.tag)}; readers that look a creator up by name find one block or the other",
-                          path, el.offset)
+                          path, el.offset, domain=el.domain)
         seen.setdefault(key, el)
 
 
@@ -127,7 +128,7 @@ def _blob(path: str, buf: Buffer, el: Element, where: str, budget: _Budget) -> I
             start = end - inflated  # bytes after the stream are judged on their own below
             if start == end:
                 return
-    yield from _opaque(path, buf, start, end, where, after_stream=start != el.value_offset)
+    yield from _opaque(path, buf, start, end, where, el.domain, after_stream=start != el.value_offset)
 
 
 def _compression(head: bytes) -> str | None:
@@ -175,12 +176,14 @@ def _inflate(path: str, buf: Buffer, el: Element, where: str, kind: str,
             + ", ".join(f"{m.signature.label} at decompressed offset {m.offset:#x}"
                         for m in index.matches[:5])  # pragma: no mutate (display)
             + ". Compression hides it from any signature search of the file itself", path, el.value_offset,
+            domain=el.domain,
         )
     for gap in index.exhausted:
         if gap.reason != "size":
             yield Finding("private.analysis-incomplete", Severity.HIGH,
                           "Compressed private data built to exhaust analysis",
-                          f"{where}: {gap.detail} (decompressed offset {gap.offset:#x})", path, el.value_offset)
+                          f"{where}: {gap.detail} (decompressed offset {gap.offset:#x})", path, el.value_offset,
+                          domain=el.domain)
     return len(inflater.unused_data) if inflater.eof else 0  # pragma: no mutate (equivalent: under the reporting floor)
 
 
@@ -188,17 +191,19 @@ def _bomb(path: str, el: Element, where: str, kind: str, size: int, reason: str)
     return Finding(
         "private.decompression-bomb", Severity.HIGH, "Compressed private data too large to inspect",
         f"{where} is {kind} data ({size:,} compressed bytes) that was not fully inspected because {reason}; "
-        "a decompression bomb, or data built to exceed analysis budgets", path, el.value_offset,
+        "a decompression bomb, or data built to exceed analysis budgets", path, el.value_offset, domain=el.domain,
     )
 
 
-def _opaque(path: str, buf: Buffer, start: int, end: int, where: str, *, after_stream: bool) -> Iterator[Finding]:
+def _opaque(path: str, buf: Buffer, start: int, end: int, where: str, domain: str, *,
+            after_stream: bool) -> Iterator[Finding]:
     size = end - start
     if after_stream and size >= 16:
         yield Finding(
             "private.data-after-stream", Severity.MEDIUM, "Data hidden after a compressed stream",
             f"{where}: {size:,} bytes follow the end of the compressed stream; decompressors stop at the end, so "
             f"nothing that reads the value normally sees them; {signatures.describe(buf, start, end)}", path, start,
+            domain=domain,
         )
         return
     head = bytes(buf[start : start + 16])  # pragma: no mutate (equivalent: window > longest dense magic)
@@ -209,7 +214,7 @@ def _opaque(path: str, buf: Buffer, start: int, end: int, where: str, *, after_s
         yield Finding(
             "private.opaque-blob", Severity.MEDIUM, "High-entropy private data of unknown format",
             f"{where} holds {size:,} bytes at {entropy:.2f} bits/byte matching no known format; that is how "
-            "encrypted or compressed data looks, and nothing in the file explains it", path, start,
+            "encrypted or compressed data looks, and nothing in the file explains it", path, start, domain=domain,
         )
 
 

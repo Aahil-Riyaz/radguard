@@ -42,14 +42,14 @@ def check(ctx: FileContext) -> Iterator[Finding]:
             f"{len(pixels)} Pixel Data elements at {where}. Software that keeps the first copy and software "
             "that keeps the last display different images from the same file, so a radiologist's viewer and "
             "an AI pipeline can be shown different scans",
-            ctx.path, pixels[1].offset,
+            ctx.path, pixels[1].offset, domain=domain,
         )
     floats = top.get(FLOAT_PIXEL_DATA, []) + top.get(DOUBLE_PIXEL_DATA, [])
     if pixels and floats:
         yield Finding(
             "pixels.multiple-representations", Severity.HIGH, "Integer and float pixel data in one file",
             "the dataset carries both Pixel Data and (Double) Float Pixel Data; which one is displayed "
-            "depends on the software", ctx.path, floats[0].offset,
+            "depends on the software", ctx.path, floats[0].offset, domain=domain,
         )
     if not pixels:
         return
@@ -62,7 +62,7 @@ def check(ctx: FileContext) -> Iterator[Finding]:
                 "pixels.ambiguous-geometry", Severity.HIGH, f"Conflicting {name} values",
                 f"{name} appears {len(copies)} times with different values ({', '.join(map(str, seen))}); readers "
                 "that keep the first copy and readers that keep the last decode the same pixel bytes with different "
-                "dimensions. Size checks below use the first", ctx.path, copies[1].offset,
+                "dimensions. Size checks below use the first", ctx.path, copies[1].offset, domain=domain,
             )
 
     def first(tag: int) -> int | None:
@@ -83,7 +83,7 @@ def _check_pixel_data(path: str, buf: Buffer, parsed: ParsedFile, index: MatchIn
         yield Finding(
             "pixels.encoding-mismatch", Severity.HIGH, "Pixel Data encoding contradicts the transfer syntax",
             f"{parsed.syntax.name} requires {expected_form} Pixel Data but this element is {actual_form}; "
-            "decoders take different code paths for the same bytes", path, px.offset,
+            "decoders take different code paths for the same bytes", path, px.offset, domain=px.domain,
         )
     if px.undefined or rows is None or cols is None or bits is None:
         return
@@ -93,7 +93,7 @@ def _check_pixel_data(path: str, buf: Buffer, parsed: ParsedFile, index: MatchIn
         # Number of Frames is text (IS), so "0" or "-5" is easy to write; decoders disagree on what to render.
         yield Finding(
             "pixels.invalid-geometry", Severity.MEDIUM, "Image header declares a zero or negative dimension",
-            f"{shape}; decoders disagree on what, if anything, to render", path, px.offset,
+            f"{shape}; decoders disagree on what, if anything, to render", path, px.offset, domain=px.domain,
         )
         return
     expected = (rows * cols * samples * frames * bits + 7) // 8
@@ -102,7 +102,7 @@ def _check_pixel_data(path: str, buf: Buffer, parsed: ParsedFile, index: MatchIn
             "pixels.size-overflow", Severity.HIGH, "Image size overflows 32-bit arithmetic",
             f"{shape} needs {expected:,} bytes. A decoder that computes the size in 32 bits allocates "
             f"{expected % (1 << 32):,} bytes and then writes the full image: a heap overflow",
-            path, px.offset,
+            path, px.offset, domain=px.domain,
         )
         return
 
@@ -116,13 +116,13 @@ def _check_pixel_data(path: str, buf: Buffer, parsed: ParsedFile, index: MatchIn
             "pixels.embedded-file", max(m.signature.severity for m in inside),
             f"{inside[0].signature.label} stored as image pixels",
             f"the declared image area contains {listed}; viewers render it as noise, and nothing that only "
-            "displays images will notice", path, inside[0].offset,
+            "displays images will notice", path, inside[0].offset, domain=px.domain,
         )
     if actual < expected:
         yield Finding(
             "pixels.truncated", Severity.HIGH, "Pixel Data shorter than the image it describes",
             f"{shape} needs {expected:,} bytes but Pixel Data holds {actual:,}; decoders that trust the header "
-            f"read {expected - actual:,} bytes past the end of the buffer", path, px.offset,
+            f"read {expected - actual:,} bytes past the end of the buffer", path, px.offset, domain=px.domain,
         )
     elif actual > padded:
         start, n = px.value_offset + padded, actual - padded
@@ -145,4 +145,4 @@ def _check_pixel_data(path: str, buf: Buffer, parsed: ParsedFile, index: MatchIn
         detail += "; " + signatures.describe(buf, start, px.end)
         title = (f"{hidden_frames} hidden frame(s) after the declared image" if hidden_frames
                  else f"{n:,} bytes hidden after the last pixel")
-        yield Finding("pixels.slack", severity, title, detail, path, start)
+        yield Finding("pixels.slack", severity, title, detail, path, start, domain=px.domain)

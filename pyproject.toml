@@ -29,6 +29,13 @@ dev = [
     "pydicom>=3.0",
     "numpy>=1.26",
     "coverage>=7.4",
+    # SARIF output is validated against the official OASIS schema (draft-04). 4.18+ depends on the native
+    # rpds-py, which the same Windows policies block; 4.17 is pure Python.
+    "jsonschema>=4.17,<4.18; sys_platform == 'win32'",
+    "jsonschema>=4.17; sys_platform != 'win32'",
+    # Without these, jsonschema silently skips the "uri", "uri-reference" and "date-time" format checks.
+    "rfc3986-validator>=0.1.1",
+    "rfc3339-validator>=0.1.4",
 ]
 
 [project.scripts]

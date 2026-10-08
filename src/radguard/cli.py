@@ -1,32 +1,54 @@
-"""Command-line entry point: `radguard scan <paths...>` and `radguard map <file>`.
+"""Command-line entry point: `radguard scan <paths...>`, `radguard map <file>` and `radguard rules`.
 
 Exit status (scan):
   0  every path was examined and no finding reached --fail-on
   1  at least one finding reached --fail-on
   2  usage error (argparse)
-  3  the scan was incomplete: a path could not be read or a check failed.
+  3  the scan or its report is incomplete: a path could not be read, a check
+     failed, the report could not be written, or RadGuard itself failed.
      This takes precedence over 1, because a verdict built on partial
      coverage cannot be trusted; findings are still reported.
+
+An unexpected exception must never look like a verdict. Python exits with
+status 1 on an uncaught exception, which is the "findings" status, so a crash
+while writing the report would have read as an ordinary result.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
+import contextlib
+import os
 import sys
-from collections import Counter
+import tempfile
+import traceback
 
-from radguard import __version__, mapview
-from radguard.findings import Finding, Severity
-from radguard.output import safe
+from radguard import __version__, mapview, report, rules, sarif
+from radguard.findings import Severity
+from radguard.output import dumps, harden_streams, safe
 from radguard.scanner import open_dicom, scan_paths
 
-SEVERITY_NAMES = [str(s) for s in Severity]
 EXIT_CLEAN, EXIT_FINDINGS, EXIT_INCOMPLETE = 0, 1, 3
-JSON_SCHEMA_VERSION = 1
+# Kept importable from here for existing callers.
+JSON_SCHEMA_VERSION, SEVERITY_NAMES = report.JSON_SCHEMA_VERSION, report.SEVERITY_NAMES
 
 
 def main(argv: list[str] | None = None) -> int:
+    harden_streams()
+    try:
+        return _main(argv)
+    except BrokenPipeError:
+        # The reader went away (`radguard scan ... | head`): the report was not delivered in full.
+        _discard_stdout()
+        return EXIT_INCOMPLETE
+    except Exception:
+        for line in traceback.format_exc().splitlines():
+            print(safe(line), file=sys.stderr)
+        print("radguard: internal error; the report is incomplete (exit status 3)", file=sys.stderr)
+        return EXIT_INCOMPLETE
+
+
+def _main(argv: list[str] | None) -> int:
     parser = argparse.ArgumentParser(
         prog="radguard",
         description="Integrity and safety scanner for medical imaging (DICOM).",
@@ -37,7 +59,9 @@ def main(argv: list[str] | None = None) -> int:
 
     scan = sub.add_parser("scan", help="scan DICOM files and directories")
     scan.add_argument("paths", nargs="+", help="files or directories (searched recursively)")
-    scan.add_argument("--format", choices=("text", "json"), default="text")
+    scan.add_argument("--format", choices=("text", "json", "sarif"), default="text")
+    scan.add_argument("-o", "--output", metavar="FILE",
+                      help="write the report to FILE (UTF-8, replaced atomically) instead of standard output")
     scan.add_argument(
         "--fail-on", choices=SEVERITY_NAMES, default="high",
         help="exit with status 1 if any finding is at least this severe (default: high)",
@@ -48,63 +72,78 @@ def main(argv: list[str] | None = None) -> int:
     mp.add_argument("--depth", type=int, help="hide elements nested deeper than this many sequences")
     mp.add_argument("--show-phi", action="store_true", help="show patient-identifying values instead of masking them")
 
+    rl = sub.add_parser("rules", help="list every rule RadGuard can report")
+    rl.add_argument("--markdown", action="store_true", help="print the rule reference (docs/rules.md)")
+
     args = parser.parse_args(argv)
-    return _map(args) if args.command == "map" else _scan(args)
+    if args.command == "map":
+        return _map(args)
+    if args.command == "rules":
+        print(rules.reference() if args.markdown else rules.listing(), end="")
+        return EXIT_CLEAN
+    return _scan(args)
 
 
 def _scan(args: argparse.Namespace) -> int:
-    threshold = Severity.parse(args.fail_on)
-    findings: list[Finding] = []
-    errors: list[dict[str, str]] = []
-    notes: list[dict[str, str]] = []
-    files = dicom = skipped = 0
-
-    for result in scan_paths(args.paths):
-        if result.note:
-            notes.append({"path": result.path, "note": result.note})
-            continue
-        files += 1
-        dicom += result.is_dicom
-        skipped += not result.is_dicom and not result.error
-        findings.extend(result.findings)
-        if result.error:
-            errors.append({"path": result.path, "error": result.error})
-
-    findings.sort(key=lambda f: (-f.severity, f.path, f.offset or 0))
-    by_severity = Counter(str(f.severity) for f in findings)
-    counts = {name: by_severity.get(name, 0) for name in reversed(SEVERITY_NAMES)}
-
-    if args.format == "json":
-        report = {
-            "tool": {"name": "radguard", "version": __version__},
-            "schema_version": JSON_SCHEMA_VERSION,
-            "summary": {"files": files, "dicom": dicom, "skipped": skipped, "errors": len(errors),
-                        "notes": len(notes), "complete": not errors, "findings": counts},
-            "findings": [f.to_dict() for f in findings],
-            "errors": errors,
-            "notes": notes,
-        }
-        json.dump(report, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+    result = report.collect(scan_paths(args.paths))
+    if not result.complete:
+        status = EXIT_INCOMPLETE
     else:
-        # Paths and details carry attacker-controlled text: everything printed goes through safe().
-        for f in findings:
-            print(safe(f"{str(f.severity).upper():<9} {f.check:<34} {f.path}"))
-            print(safe(f"{'':<9} {f.title}"))
-            print(safe(f"{'':<9} {f.detail}"))
-        for e in errors:
-            print(safe(f"{'ERROR':<9} {e['path']}: {e['error']}"), file=sys.stderr)
-        for n in notes:
-            print(safe(f"{'NOTE':<9} {n['path']}: {n['note']}"), file=sys.stderr)
-        found = ", ".join(f"{name}={count}" for name, count in counts.items() if count)
-        print(f"\nscanned {files} files: {dicom} DICOM, {skipped} skipped, {len(errors)} errors"
-              f"{f', {len(notes)} notes' if notes else ''}; findings: {found or 'none'}")
-        if errors:
-            print("scan INCOMPLETE: some paths could not be examined (exit status 3)", file=sys.stderr)
+        status = EXIT_FINDINGS if result.reaches(Severity.parse(args.fail_on)) else EXIT_CLEAN
 
-    if errors:
-        return EXIT_INCOMPLETE
-    return EXIT_FINDINGS if any(f.severity >= threshold for f in findings) else EXIT_CLEAN
+    if args.format == "text":
+        text = "\n".join(report.to_text(result)) + "\n"
+    elif args.format == "json":
+        text = dumps(report.to_json(result))
+    else:
+        text = dumps(sarif.to_sarif(result, os.getcwd(), exit_code=status))
+
+    delivered = _deliver(text, args.output)
+    for line in report.diagnostics(result):
+        print(line, file=sys.stderr)
+    return status if delivered else EXIT_INCOMPLETE
+
+
+def _deliver(text: str, path: str | None) -> bool:
+    if path is None:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        return True
+    try:
+        _write_atomically(path, text)
+    except OSError as exc:
+        print(safe(f"radguard: cannot write {path}: {exc.strerror or exc}"), file=sys.stderr)
+        return False
+    return True
+
+
+def _write_atomically(path: str, text: str) -> None:
+    """Write UTF-8 to a temporary file beside `path`, then rename it over `path`.
+
+    A consumer (a CI upload step, a SIEM collector) sees either the previous
+    report or the complete new one, never a truncated file. Writing the file
+    ourselves also avoids shell redirection: Windows PowerShell 5.1's `>`
+    writes UTF-16, which SARIF and JSON consumers reject. The file is created
+    readable by its owner only, since a report says where sensitive data and
+    malware live.
+    """
+    directory = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(prefix=".radguard-", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def _discard_stdout() -> None:
+    # Python flushes stdout again at exit; point it at the null device so that flush cannot fail too.
+    with contextlib.suppress(OSError, ValueError, AttributeError):
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
 
 
 def _map(args: argparse.Namespace) -> int:

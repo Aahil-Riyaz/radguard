@@ -9,6 +9,7 @@ less than it was asked to can never look clean. See docs/security/self-audit.md.
 
 from __future__ import annotations
 
+import hashlib
 import mmap
 import os
 import stat
@@ -47,6 +48,8 @@ class FileResult:
     findings: list[Finding] = field(default_factory=list)
     error: str | None = None  # the path could not be examined (fully)
     note: str | None = None  # deliberately not examined, and why
+    size: int | None = None  # bytes examined
+    sha256: str | None = None  # of exactly the bytes examined, for files with findings or errors
 
 
 def scan_paths(paths: Iterable[str], checks: Iterable[Check] = ALL_CHECKS) -> Iterator[FileResult]:
@@ -101,12 +104,30 @@ def open_dicom(path: str) -> Iterator[FileContext | None]:
             return
         head = _read(fd, min(st.st_size, SNIFF_LEN))
         if _context(path, head) is None:  # decide before reading the rest of a large non-DICOM file
+            if is_lfs_pointer(head):
+                raise NotCheckedOut(LFS_MESSAGE)
             yield None
             return
         buf = head + _read(fd, st.st_size - len(head))
         yield _context(path, buf)
     finally:
         os.close(fd)
+
+
+class NotCheckedOut(OSError):
+    """The path holds a placeholder for the file, not the file: its content cannot be examined."""
+
+
+# A Git LFS pointer stands in for a file whose content was not fetched, typically in CI that checks out
+# without LFS. Skipping it as "not DICOM" would pass a scan that never saw the file, so it is an error.
+LFS_VERSION = b"version https://git-lfs.github.com/spec/v1\n"
+LFS_MAX = 1024  # the LFS specification limits pointer files to under 1024 bytes
+LFS_MESSAGE = ("Git LFS pointer: the file's content is not checked out, so it was not scanned "
+               "(fetch it with git lfs pull, or check out with lfs: true in GitHub Actions)")
+
+
+def is_lfs_pointer(head: bytes) -> bool:
+    return len(head) < LFS_MAX and head.startswith(LFS_VERSION) and b"\noid sha256:" in head and b"\nsize " in head
 
 
 def _context(path: str, buf: Buffer) -> FileContext | None:
@@ -142,7 +163,10 @@ def scan_file(path: str, checks: Iterable[Check] = ALL_CHECKS) -> FileResult:
                     findings.extend(check(ctx))
                 except Exception as exc:  # a scanner must survive hostile input; report, don't crash
                     errors.append(f"{check.__module__}: {exc!r}")
-            return FileResult(path, True, _cap(path, findings), "; ".join(errors) or None)
+            # The digest identifies exactly the bytes the findings describe, even if the file changes later.
+            digest = hashlib.sha256(ctx.buf).hexdigest() if findings or errors else None
+            return FileResult(path, True, _cap(path, findings), "; ".join(errors) or None, size=ctx.size,
+                              sha256=digest)
     except (OSError, ValueError, BufferError) as exc:
         return FileResult(path, is_dicom=False, error=str(exc))
 

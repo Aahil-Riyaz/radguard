@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 
+# What a finding's offset counts bytes of. A deflated file (transfer syntax 1.2.840.10008.1.2.1.99) is
+# analysed after decompression, and an offset into the decompressed dataset is not a position in the file.
+FILE, INFLATED = "file", "inflated"
+
 
 class Severity(IntEnum):
     INFO = 0
@@ -30,6 +34,7 @@ class Finding:
     path: str
     offset: int | None = None
     references: tuple[str, ...] = ()
+    domain: str = FILE  # FILE or INFLATED: what `offset` counts bytes of
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -39,5 +44,6 @@ class Finding:
             "detail": self.detail,
             "path": self.path,
             "offset": self.offset,
+            "domain": self.domain,
             "references": list(self.references),
         }
