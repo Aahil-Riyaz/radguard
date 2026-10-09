@@ -55,15 +55,19 @@ CWE_GUID = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cwe.mitre.org/"))  # stab
 
 # Notification descriptors: why a path is missing from the results.
 PATH_ERROR, PATH_SKIPPED, RESULTS_OMITTED = "scan.path-error", "scan.path-skipped", "sarif.results-omitted"
-NOTIFICATIONS = (
+NOTIFICATIONS = (  # id, level, short description, full description, what to do
     (PATH_ERROR, "error", "A path could not be examined",
      "A file or directory could not be read, or a check failed on it. The scan is incomplete: the absence of "
-     "results for this path is not evidence that it is clean."),
+     "results for this path is not evidence that it is clean.",
+     "Fix the cause given in the message (permissions, a file that changed or disappeared, a Git LFS pointer) and "
+     "scan again. Until then, treat the path as not scanned."),
     (PATH_SKIPPED, "note", "A path was deliberately not examined",
-     "For example a symbolic link to a directory, which is not followed."),
+     "For example a symbolic link to a directory, which is not followed.",
+     "If the target should be covered, scan it directly."),
     (RESULTS_OMITTED, "warning", "Least severe results omitted",
      f"GitHub code scanning rejects a run with more than {MAX_RESULTS:,} results, so the most severe ones were "
-     "kept. The JSON report lists every finding."),
+     "kept. The JSON report lists every finding.",
+     "Use the JSON report (--format json) for the complete list, or scan fewer files per run."),
 )
 
 
@@ -97,7 +101,8 @@ def to_sarif(report: ScanReport, srcroot: str, exit_code: int | None = None,
         rule_id = rule_identifier(f)
         digest = fingerprint(f.check, str(loc["uri"]), f.offset, f.domain)
         seen[digest] += 1  # the same rule twice at one place: keep the alerts apart, as CodeQL does
-        results.append(_result(f, rule_id, rule_index[rule_id], loc, f"{digest}:{seen[digest]}"))
+        size = report.artifacts[f.path].size if f.path in report.artifacts else None
+        results.append(_result(f, rule_id, rule_index[rule_id], loc, size, f"{digest}:{seen[digest]}"))
 
     notifications = [_notification(PATH_ERROR, e.message, location(e.path)) for e in report.errors]
     notifications += [_notification(PATH_SKIPPED, n.message, location(n.path)) for n in report.notes]
@@ -119,10 +124,10 @@ def to_sarif(report: ScanReport, srcroot: str, exit_code: int | None = None,
             "semanticVersion": __version__,
             "informationUri": __url__,
             "rules": descriptors,
-            "notifications": [{"id": i, "name": rules.Rule(i, Severity.INFO, "", "", "incomplete").name,
-                               "shortDescription": {"text": short}, "fullDescription": {"text": full},
+            "notifications": [{"id": i, "name": rules.pascal_case(i), "shortDescription": {"text": short},
+                               "fullDescription": {"text": full}, "help": {"text": advice},
                                "defaultConfiguration": {"level": level}}
-                              for i, level, short, full in NOTIFICATIONS],
+                              for i, level, short, full, advice in NOTIFICATIONS],
             "supportedTaxonomies": [{"name": CWE_TAXONOMY, "guid": CWE_GUID}],
         }},
         "invocations": [invocation],
@@ -194,18 +199,21 @@ def _cwe_taxonomy() -> dict[str, object]:
     }
 
 
-def _result(finding: Finding, rule_id: str, rule_index: int, location: dict[str, object],
+def _result(finding: Finding, rule_id: str, rule_index: int, location: dict[str, object], size: int | None,
             fingerprint_value: str) -> dict[str, object]:
     physical: dict[str, object] = {"artifactLocation": location}
     properties: dict[str, object] = {"severity": str(finding.severity)}
     where = ""
     if finding.offset is not None:
         properties.update(offset=finding.offset, domain=finding.domain)
-        if finding.domain == FILE:
-            physical["region"] = {"byteOffset": finding.offset}
-            where = f"At byte {finding.offset:#x} of the file"
-        else:  # a position in the decompressed dataset is no position in the file: the location is the file
-            where = f"At byte {finding.offset:#x} of the decompressed dataset (the file is deflated)"
+        where = (f"At byte {finding.offset:#x} of the file" if finding.domain == FILE
+                 else f"At byte {finding.offset:#x} of the decompressed dataset (the file is deflated)")
+    if finding.offset is not None and finding.domain == FILE:
+        physical["region"] = {"byteOffset": finding.offset}
+    elif size is not None:
+        # About the whole file, or about a position in the decompressed dataset, which is no position in the
+        # file: the region is the whole file, stated explicitly rather than left to the spec's default.
+        physical["region"] = {"byteOffset": 0, "byteLength": size}
     # The offset is in the text too (SARIF 3.27.11): GitHub shows the file of a binary region but not the offset.
     return {
         "ruleId": rule_id,

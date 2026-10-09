@@ -63,6 +63,21 @@ jobs:
       - run: pip install .
       # Exit status 1 means findings, which the examples are built to produce; 2 or 3 fail the job.
       - run: radguard scan examples --format sarif --output radguard.sarif || [ $? -eq 1 ]
+      # Microsoft's SARIF validator with its SARIF and GitHub rule sets, over the real scan and a log that
+      # exercises every branch of the writer. It exits 0 even when it reports problems, so the step reads
+      # its output and fails on any error or warning.
+      - name: Validate with Microsoft's SARIF Multitool
+        run: |
+          python scripts/sarif_edge_cases.py edge-cases.sarif
+          npx --yes @microsoft/sarif-multitool@5.7.0 validate radguard.sarif edge-cases.sarif \
+            --rule-kind "Sarif;Gh" --level "Error;Warning" --output validation.sarif --log ForceOverwrite
+          python -c '
+          import json, sys
+          results = json.load(open("validation.sarif", encoding="utf-8-sig"))["runs"][0].get("results", [])
+          for r in results:
+              print(r["level"], r["ruleId"], r["message"].get("arguments"))
+          sys.exit(1 if results else 0)
+          '
       - uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
         id: upload
         with:

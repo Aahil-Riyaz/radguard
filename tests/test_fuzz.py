@@ -20,6 +20,8 @@ from radguard.codecs import j2k_end, jpeg_end, rle_problem
 from radguard.checks import ALL_CHECKS
 from radguard.context import FileContext
 from radguard.dicom import Limits, coverage, parse
+from radguard.findings import FILE, INFLATED
+from radguard.rules import RULES
 
 HEADER = bytes(128) + b"DICM"
 LIMITS = Limits(max_depth=8, max_elements=5_000, max_inflated=1 << 20)
@@ -58,9 +60,12 @@ def check_invariants(data: bytes) -> None:
         assert el_.offset <= el_.value_offset <= el_.end <= limit
     ctx = FileContext("<fuzz>", data, len(data))
     ctx.__dict__["parsed"] = parsed  # reuse the bounded parse
+    sizes = {FILE: len(data), INFLATED: len(parsed.inflated) if parsed.inflated is not None else -1}
     for check in ALL_CHECKS:
         for finding in check(ctx):
-            assert finding.check and finding.title
+            assert finding.check in RULES and finding.title  # every finding is a catalogued rule
+            # ...and points inside the bytes its offset counts: the file, or the decompressed dataset.
+            assert finding.offset is None or 0 <= finding.offset <= sizes[finding.domain], finding
 
 
 # Example counts come from the Hypothesis profile (see conftest.py): 400 by default,

@@ -49,6 +49,11 @@ ADVICE = {
 PRECISIONS = ("very-high", "high", "medium", "low")  # GitHub code scanning's scale
 
 
+def pascal_case(identifier: str) -> str:
+    """"preamble.pe-polyglot" -> "PreamblePePolyglot"."""
+    return "".join(word.capitalize() for word in re.split(r"[.-]", identifier))
+
+
 @dataclass(frozen=True)
 class Rule:
     id: str
@@ -67,7 +72,7 @@ class Rule:
     @property
     def name(self) -> str:
         """PascalCase form of the id, for formats that want an identifier: PreamblePePolyglot."""
-        return "".join(word.capitalize() for word in re.split(r"[.-]", self.id))
+        return pascal_case(self.id)
 
     @property
     def anchor(self) -> str:

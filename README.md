@@ -81,6 +81,30 @@ The most dangerous files aren't malformed, just *ambiguous*: different software 
 - **Pixel contract violations:** duplicate images, hidden frames and slack, executables stored as pixels, truncated pixel data, 32-bit size overflow (heap-overflow trigger), encoding contradicting the transfer syntax
 - **30+ structural anomalies**, each with the reason it matters: lying lengths, transfer-syntax mismatch, VR confusion, unterminated sequences, decompression bombs, recursion bombs, corrupt fragment tables, ...
 
+Every finding belongs to one of 80 rules, each with what it means, why it matters, what to do and its CWE: see the [rule reference](docs/rules.md) or run `radguard rules`.
+
+## Findings in GitHub code scanning
+
+`radguard scan --format sarif` writes [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/sarif-v2.1.0-errata01-os-complete.html), so findings appear in GitHub's Security tab, VS Code and security dashboards. This repository's CI uploads RadGuard's scan of its own examples on every push ([sample log](docs/sample-report.sarif)).
+
+```yaml
+permissions:
+  contents: read
+  security-events: write
+steps:
+  - run: radguard scan . --format sarif --output radguard.sarif || [ $? -eq 1 ]   # 1 = findings
+  - uses: github/codeql-action/upload-sarif@v4
+    with: {sarif_file: radguard.sarif, category: radguard}
+```
+
+SARIF was designed for source code, and RadGuard reports on binary files built by an attacker, so the output is engineered rather than templated ([design](docs/design/sarif.md)):
+
+- **Byte-offset locations, never fake line numbers**, which the spec forbids for binary files; RadGuard supplies the alert fingerprints GitHub cannot compute without a line.
+- **Correct severity per alert:** GitHub reads severity from the rule, so a finding less severe than its rule's usual severity (a vendor PDF rather than an executable) is reported under a sub-rule such as `values.embedded-file/low` instead of showing as critical.
+- **Inert attacker text:** file names and strings from scanned files cannot create links, HTML or placeholders in a message, and paths are percent-encoded from their exact bytes, so a hostile file name cannot invalidate the upload.
+- **Honest coverage:** an incomplete scan is a failed run with one error per path not examined; offsets into the decompressed dataset of a deflated file are never presented as file positions.
+- **Verified twice:** every log the tests produce is validated against the official OASIS schema, and CI checks that GitHub actually accepted the upload.
+
 ## Engineering
 
 - **Parser written from scratch** for every native encoding (implicit/explicit, little/big endian, deflated), nested and undefined-length sequences, encapsulated pixel data and Basic Offset Tables, and bare datasets with no Part 10 header. Zero runtime dependencies. Files are read once (large ones memory-mapped), headers are decoded in place, and values are decoded only when a check asks for them.
@@ -90,11 +114,11 @@ The most dangerous files aren't malformed, just *ambiguous*: different software 
 
 ## Security of RadGuard itself
 
-A scanner that reads hostile files is itself a target. RadGuard has been [self-audited](docs/security/self-audit.md) against an attacker who controls file bytes, file names, the directory layout and timing: 9 findings, all fixed, each pinned by a regression test named after its ID ([`tests/test_hostile.py`](tests/test_hostile.py)).
+A scanner that reads hostile files is itself a target. RadGuard has been [self-audited](docs/security/self-audit.md) against an attacker who controls file bytes, file names, the directory layout and timing: 17 findings over three rounds, all fixed, each pinned by a regression test named after its ID ([`tests/test_hostile.py`](tests/test_hostile.py)).
 
 - **Budgets fail loud.** Every limit (search window, candidate budget, depth, element count, inflated size) is reported when reached. Flooding a file with decoy signatures to bury a real one produces a high finding instead of a blind spot.
 - **Hostile file systems:** FIFOs and device files are never opened for reading (race-free `fstat` on the descriptor); small files are read privately so a file truncated mid-scan can't crash the process.
-- **Safe output:** terminal escape sequences and Unicode bidi overrides in file names or contents are escaped before printing.
+- **Safe output:** terminal escape sequences and Unicode bidi overrides in file names or contents are escaped before printing; a file name the console cannot encode, or one that is not valid Unicode at all, can no longer abort the report or invalidate a JSON or SARIF document.
 - **Bounded work:** every loop over attacker data runs in C or advances by at least one structure, with caps; pathological inputs are timed in tests.
 
 Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
@@ -109,14 +133,14 @@ radguard scan examples/
 radguard map examples/two-scans-one-file.dcm
 ```
 
-`radguard scan` takes files or directories, `--format json` for machine-readable output (versioned schema), and `--fail-on {info,low,medium,high,critical}` to choose the severity that counts as a failure.
+`radguard scan` takes files or directories, `--format json` (versioned schema) or `--format sarif` for machine-readable output, `--output FILE` to write the report as UTF-8, replaced atomically (Windows PowerShell 5.1's `>` writes UTF-16, which JSON and SARIF consumers reject), and `--fail-on {info,low,medium,high,critical}` to choose the severity that counts as a failure. `radguard rules` lists every rule.
 
 | Exit status | Meaning |
 |---|---|
 | 0 | Every path was examined; no finding reached `--fail-on` |
 | 1 | At least one finding reached `--fail-on` |
 | 2 | Usage error |
-| 3 | **Scan incomplete**: a file or directory could not be read, or a check failed. Takes precedence over 1, because a verdict built on partial coverage can't be trusted |
+| 3 | **Incomplete**: a file or directory could not be read, a check failed, a Git LFS pointer stood in for a file, the report could not be written, or RadGuard itself failed. Takes precedence over 1, because a verdict built on partial coverage can't be trusted (and a crash must never look like an ordinary result) |
 
 RadGuard fails closed: anything it was asked to scan but could not examine is reported, never silently dropped. On machines whose application-control policy blocks unsigned launchers (such as Windows Smart App Control), `python -m radguard ...` runs the same commands.
 
@@ -126,7 +150,8 @@ RadGuard fails closed: anything it was asked to scan but could not examine is re
 - [x] L1: value-level carving, encapsulated documents, codestream analysis, self-audit
 - [x] L1: private-data analysis, including decompression of compressed private values
 - [x] Engineering review: fail-closed scanning, bare datasets, strict typing, mutation testing
-- [ ] L1: SARIF output; parallel scanning
+- [x] L1: SARIF output for GitHub code scanning; rule catalog with CWE mapping
+- [ ] L1: parallel scanning
 - [ ] **L2 privacy:** PHI in tags (PS3.15 Annex E) and burned-in pixel text (GPU OCR)
 - [ ] **L3 integrity:** CT tamper and deepfake detection, GPU-accelerated
 - [ ] **L4 provenance:** DICOM digital signatures

@@ -90,7 +90,7 @@ Searching anywhere in a file needs more evidence per hit than matching at a fixe
 - **Symlink loops:** `os.walk` does not follow directory symlinks.
 - **Decompression bombs:** inflation is capped (256 MiB) and reported.
 - **Integer overflow:** not applicable in Python. RadGuard models 32-bit overflow only to warn about C/C++ decoders (`pixels.size-overflow`).
-- **Writes and network:** RadGuard never writes to scanned paths and makes no network connections.
+- **Writes and network:** RadGuard never writes to scanned paths and makes no network connections. The only file it writes is the report named with `--output`: written to a private temporary file beside it and renamed over it, so a reader never sees a partial report and an existing symlink at that path is replaced rather than followed.
 
 ## 2026-10-07: new code reviewed before commit
 
@@ -105,8 +105,27 @@ The day 4 private-data check decompresses attacker data, so it was reviewed agai
 
 The engineering review the same day ([2026-10-07](../review/2026-10-07-engineering-review.md)) also found three fail-open gaps with security impact: scans that could not read some files exited 0, unreadable directories were skipped silently, and DICOM datasets without a Part 10 header were not analysed at all.
 
+## 2026-10-09: reports and SARIF
+
+Day 5 added SARIF output, which carries attacker-controlled text into GitHub code scanning and other viewers, so the whole output path was reviewed against the threat model: what can a hostile file *name* or file *content* do to the report and to the people and systems that read it? Four issues were found in existing code, each reproduced before fixing and pinned by a test in `tests/test_hostile.py`:
+
+| ID | Severity | Issue | Fix |
+|---|---|---|---|
+| RG-14 | High | **A file name could abort the text report.** With output redirected (CI logs, `> report.txt`), Python encodes stdout in the Windows code page with `errors="strict"`. A legitimate Chinese file name raised `UnicodeEncodeError` halfway through: everything after it was lost, and the crash exited with status 1, the "findings" status. On Linux a name that is not valid UTF-8 did the same. Reproduced with a Chinese name and with an unpaired surrogate | Streams write unencodable characters as escapes; `safe()` also escapes surrogates |
+| RG-15 | Medium | **A file name could invalidate the whole JSON report.** POSIX names that are not UTF-8, and NTFS names with unpaired surrogates, reach Python as lone surrogates, which `json.dumps` writes as `\udcff` escapes: valid for Python, rejected by strict parsers such as Rust's serde_json, so one planted file name could discard every finding in a SIEM pipeline | Every string in a JSON or SARIF report is made valid Unicode before serialising |
+| RG-16 | Low | **An internal error looked like a verdict.** An uncaught exception exits with status 1, the "findings" status, so a crash while reporting could pass for an ordinary result | Any internal error, and a closed output pipe, exits 3 (incomplete) |
+| RG-17 | Medium | **Git LFS pointers passed as clean.** A repository that stores DICOM files in Git LFS, checked out in CI without LFS, holds small text pointers in place of the images; RadGuard skipped them as "not DICOM" and the scan passed without seeing a single image | A Git LFS pointer is an error (the scan is incomplete), and the message says how to fetch the content |
+
+The SARIF writer was designed against the same threat model from the start ([design](../design/sarif.md)):
+
+- **Link injection.** SARIF viewers render `[text](target)` in a message as a link, GitHub may render messages as Markdown, and pull request annotations are visible to anyone who can read the repository. A vendor name such as `[Download the fixed viewer](https://...)` must stay text. Escaping brackets as the spec describes is not enough on its own: Microsoft's viewer matches links with a regular expression that ignores escapes, so a `(` after `]` is escaped too. HTML and SARIF placeholders are neutralised as well, and a property test checks that arbitrary input never yields a link while losing nothing.
+- **URI scheme injection and invalid URIs.** A file named `javascript:alert(1)` at the root of a scan would otherwise become a URI with a scheme, and GitHub rejects the whole upload for one invalid URI. Paths are percent-encoded from their exact bytes, with `:` always encoded.
+- **Wrong locations.** Offsets into the decompressed dataset of a deflated file were indistinguishable from file offsets (in JSON too). Findings now record which bytes their offset counts, and only file offsets become SARIF regions.
+- **Privacy.** The SARIF log does not record the absolute path of the scanning machine, the command line, the environment or the machine name.
+
 ## Residual risks
 
 - RG-04 above 64 MiB on POSIX.
 - File symlinks are followed: the scanner reads whatever the invoking user can read. There is no privilege boundary to cross, but scanning as root is not recommended.
 - Signature search runs at about 50 to 80 MB/s per core, bounded by the 1 GiB window. Parallel scanning is on the roadmap.
+- File names are part of every report by necessity. DICOM file and directory names can contain patient identifiers, so a report of such an archive should only go to systems approved for patient data.

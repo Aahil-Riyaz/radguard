@@ -9,7 +9,7 @@ Every day gets one real, commit-sized task. If a day runs short, the minimum is 
 - [x] D2: Byte-coverage DICOM parser written from scratch (all native encodings, sequences, encapsulated, deflate); hidden-payload, pixel-contract and 31 structural checks; `radguard map`; fuzzing; differential tests vs pydicom
 - [x] D3: Self-audit (9 findings fixed, regression-tested); budgeted carving engine; value-level carving with element paths; encapsulated documents; JPEG/JPEG-LS/J2K/RLE codestream analysis
 - [x] D4: Engineering review (fail-closed exit status and directory errors, bare datasets, strict typing, mutation testing) and private-data analysis with budgeted decompression of compressed private values
-- [ ] D5: SARIF output so findings show up in GitHub code scanning and SIEMs
+- [x] D5: SARIF 2.1.0 output, verified by a real upload to GitHub code scanning in CI; rule catalog (80 rules, CWE mapping, generated reference); offsets labelled file vs decompressed; output hardening (RG-14 to RG-17)
 - [ ] D6: Multiprocessing; benchmark files/sec on 10k files
 - [ ] D7: Blog post #1, "Your CT scan can be an .exe"
 

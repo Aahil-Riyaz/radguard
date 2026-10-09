@@ -108,6 +108,21 @@ def test_sample_report_is_current(monkeypatch, capsys):
         "regenerate: radguard scan examples --format sarif -o docs/sample-report.sarif"
 
 
+def test_edge_case_log_for_external_validators_is_valid(validator, tmp_path):
+    # CI hands this log to Microsoft's SARIF Multitool; it must keep covering every branch of the writer.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("edge", ROOT / "scripts/sarif_edge_cases.py")
+    edge = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(edge)
+    edge.main(str(tmp_path / "edge.sarif"))
+    run = the_run(valid(json.loads((tmp_path / "edge.sarif").read_text(encoding="utf-8")), validator))
+    levels = {n["descriptor"]["id"]: n["level"] for n in run["invocations"][0]["toolExecutionNotifications"]}
+    assert levels == {sarif.PATH_ERROR: "error", sarif.PATH_SKIPPED: "note", sarif.RESULTS_OMITTED: "warning"}
+    assert "values.embedded-file/low" in {r["ruleId"] for r in run["results"]}
+    assert {r["properties"].get("domain") for r in run["results"]} >= {"file", "inflated"}
+    assert any("offset" not in r["properties"] for r in run["results"])  # a finding about a whole file
+
+
 def test_incomplete_scan_is_a_failed_run(validator, write_file, tmp_path, capsys):
     evil = write_file("evil.dcm", part10(image(4, 4)) + fake_elf())
     assert main(["scan", evil, str(tmp_path / "missing.dcm"), "--format", "sarif"]) == 3
@@ -142,6 +157,14 @@ def test_descriptors_carry_what_github_requires_within_its_limits(validator):
         score = d["properties"]["security-severity"]
         assert isinstance(score, str) and 0.0 < float(score) <= 10.0  # a non-number fails the whole upload
         assert d["helpUri"].startswith("https://")
+
+
+def test_notification_descriptors_are_complete(validator):
+    driver = the_run(valid(to_sarif(scan_report()), validator))["tool"]["driver"]
+    assert [n["id"] for n in driver["notifications"]] == [sarif.PATH_ERROR, sarif.PATH_SKIPPED, sarif.RESULTS_OMITTED]
+    for n in driver["notifications"]:  # Microsoft's GitHub rule set (GH2012) checks every descriptor
+        assert n["shortDescription"]["text"] and n["fullDescription"]["text"] and n["help"]["text"]
+    assert driver["notifications"][0]["name"] == "ScanPathError"
 
 
 def test_binary_regions_only(validator):
@@ -186,7 +209,14 @@ def test_a_real_deflated_file(validator, write_file, capsys):
     run = the_run(valid(json.loads(capsys.readouterr().out), validator))
     padding = next(r for r in run["results"] if r["ruleId"].startswith("structure.nonzero-padding"))
     assert padding["properties"]["domain"] == "inflated" and padding["properties"]["offset"] > len(blob)
-    assert "region" not in padding["locations"][0]["physicalLocation"]
+    # The decompressed position is no file position, so the region is the whole file, stated explicitly.
+    assert padding["locations"][0]["physicalLocation"]["region"] == {"byteOffset": 0, "byteLength": len(blob)}
+
+
+def test_a_finding_about_a_whole_file_covers_it_explicitly_when_its_size_is_known(validator):
+    art = Artifact("/repo/a.dcm", 1234, "ab" * 32)
+    run = the_run(valid(to_sarif(scan_report([finding(offset=None)], artifacts=[art])), validator))
+    assert run["results"][0]["locations"][0]["physicalLocation"]["region"] == {"byteOffset": 0, "byteLength": 1234}
 
 
 def test_artifacts_are_identified_by_hash(validator):

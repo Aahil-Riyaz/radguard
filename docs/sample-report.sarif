@@ -3302,6 +3302,9 @@
               "fullDescription": {
                 "text": "A file or directory could not be read, or a check failed on it. The scan is incomplete: the absence of results for this path is not evidence that it is clean."
               },
+              "help": {
+                "text": "Fix the cause given in the message (permissions, a file that changed or disappeared, a Git LFS pointer) and scan again. Until then, treat the path as not scanned."
+              },
               "defaultConfiguration": {
                 "level": "error"
               }
@@ -3315,6 +3318,9 @@
               "fullDescription": {
                 "text": "For example a symbolic link to a directory, which is not followed."
               },
+              "help": {
+                "text": "If the target should be covered, scan it directly."
+              },
               "defaultConfiguration": {
                 "level": "note"
               }
@@ -3327,6 +3333,9 @@
               },
               "fullDescription": {
                 "text": "GitHub code scanning rejects a run with more than 25,000 results, so the most severe ones were kept. The JSON report lists every finding."
+              },
+              "help": {
+                "text": "Use the JSON report (--format json) for the complete list, or scan fewer files per run."
               },
               "defaultConfiguration": {
                 "level": "warning"
@@ -3344,8 +3353,8 @@
       "invocations": [
         {
           "executionSuccessful": true,
-          "startTimeUtc": "2026-10-08T20:48:26.925Z",
-          "endTimeUtc": "2026-10-08T20:48:26.930Z",
+          "startTimeUtc": "2026-10-09T05:11:36.434Z",
+          "endTimeUtc": "2026-10-09T05:11:36.439Z",
           "toolExecutionNotifications": [],
           "exitCode": 1
         }
