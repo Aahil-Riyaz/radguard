@@ -23,9 +23,13 @@ SARIF was designed for source-code analysers. RadGuard reports on binary files b
 
 SARIF 3.30.1: "For regions in binary artifacts, a region object SHALL define a binary region and SHALL NOT define a text region." A DICOM file has no lines, so a result carries `region.byteOffset` and never `startLine`. Container scanners such as Trivy and Grype write a fake `startLine: 1` instead; besides breaking the spec, that makes GitHub's upload action fingerprint the result by hashing the file's first "line", which for a PE/DICOM polyglot is the attacker's preamble.
 
-GitHub's documentation marks `startLine` as required, but GitHub's own CodeQL omits the region for non-text files, GitHub staff advise leaving line information out for binary files ([codeql-action#754](https://github.com/github/codeql-action/issues/754)), and osv-scanner uploads region-less results every day. The CI job below uploads byte-offset results on every push, so if GitHub ever rejects them the build fails.
+GitHub's documentation marks `startLine` as required, but GitHub's own CodeQL omits the region for non-text files, the advice in the upload action's issue tracker is to leave line information out for binary files ([codeql-action#754](https://github.com/github/codeql-action/issues/754)), and osv-scanner uploads region-less results every day. The CI job below uploads byte-offset results on every push, so if GitHub ever rejects them the build fails.
 
 Findings carry a start offset, not an extent, so regions have no `byteLength`. Per 3.30.12 such a region is the point just before that byte: where the finding starts.
+
+The offset is also written into the message ("At byte 0x418e of the file"). SARIF 3.27.11 asks for the location in the message, and GitHub shows the file of a binary region but not the offset.
+
+**An offset is only a region if it counts bytes of the file.** A deflated file (transfer syntax 1.2.840.10008.1.2.1.99) is analysed after decompression, and a payload found in the decompressed dataset has an offset into that dataset, which can lie far beyond the end of the file. Before SARIF made this question unavoidable, findings did not record which kind of offset they carried, so the JSON report was ambiguous for deflated files. Every finding now has a `domain` (`file` or `inflated`); an inflated offset is reported on the file with no region, and the offset and domain go in the message and the result's properties. The test suite checks every finding any test produces: its offset must lie inside the bytes its domain counts.
 
 ### RadGuard supplies the fingerprints
 
@@ -74,6 +78,8 @@ Property tests generate names full of URI delimiters and surrogates and check th
 
 A scan that could not read everything must never look clean (exit status 3). In SARIF the same fact is `executionSuccessful: false`, and each path that was not examined is an `error` notification with its location; 3.20.21 says a consumer then "SHALL NOT assume that a failed run contains a complete set of analysis results". Deliberately skipped paths are `note` notifications.
 
+A Git LFS pointer is an error too. A repository that stores DICOM files with Git LFS, checked out in CI without `lfs: true`, contains small text files in place of the images; skipping them as "not DICOM" would pass a scan that never saw a single image.
+
 ### Limits fail loud
 
 GitHub rejects a run with more than 25,000 results. RadGuard keeps the 25,000 most severe (findings are already ordered by severity), reports the omission as a `warning` notification and in `properties.resultsOmitted`, and leaves the JSON report complete. Other limits are far away and checked in tests: at most 5 tags per rule (GitHub reads 10), descriptions under 1,024 characters, one location per result, one run per log.
@@ -85,7 +91,7 @@ The spec's way to classify rules is a taxonomy (3.19.3, 3.49.15): the log carrie
 ## Validation
 
 - **Schema:** every SARIF document the tests produce is validated against the official OASIS schema ([`tests/schemas/sarif-schema-2.1.0.json`](../../tests/schemas/sarif-schema-2.1.0.json), pinned by SHA-256), with URI and date-time formats checked. A test first proves the validator rejects an invalid log, so the check cannot pass vacuously.
-- **GitHub:** the `code-scanning` CI job scans `examples/` and uploads the log with `github/codeql-action/upload-sarif`. The action waits for GitHub to process it and fails the job if GitHub rejects anything.
+- **GitHub:** the `code-scanning` CI job scans `examples/` and uploads the log with `github/codeql-action/upload-sarif`. The action stops waiting after about two and a half minutes and then passes even if GitHub later rejects the file, so the next step asks GitHub's API for the upload's processing status and fails the job unless it is `complete`.
 - **Hostile input:** file names that are not valid Unicode, bidirectional overrides, link and HTML syntax, and placeholders, each with a regression test.
 
 ## Using it in GitHub Actions

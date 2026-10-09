@@ -64,7 +64,9 @@ def _valid_tree(obj: object) -> object:
 
 def dumps(report: object) -> str:
     """Serialise a report as pure-ASCII JSON in which every string is valid Unicode."""
-    return json.dumps(_valid_tree(report), indent=2, ensure_ascii=True) + "\n"
+    return json.dumps(_valid_tree(report),
+                      ensure_ascii=True,  # the same bytes whatever the console or file encoding
+                      indent=2) + "\n"  # pragma: no mutate (display)
 
 
 def harden_streams() -> None:

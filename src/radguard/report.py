@@ -78,7 +78,8 @@ def collect(results: Iterable[FileResult], clock: Callable[[], datetime] = utc_n
             report.errors.append(PathMessage(result.path, result.error))
         if result.sha256 is not None and result.size is not None:
             report.artifacts[result.path] = Artifact(result.path, result.size, result.sha256)
-    report.findings.sort(key=lambda f: (-f.severity, f.path, f.offset or 0))
+    # Most severe first; within a file, findings about the whole file before those at an offset.
+    report.findings.sort(key=lambda f: (-f.severity, f.path, f.offset is not None, f.offset or 0))
     report.finished = clock()
     return report
 

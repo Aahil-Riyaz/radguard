@@ -12,6 +12,7 @@ from builder import fake_elf, fake_pe, image, part10
 from radguard import cli, report
 from radguard.cli import main
 from radguard.findings import Finding, Severity
+from radguard.output import dumps
 from radguard.scanner import FileResult
 
 T0 = datetime(2026, 10, 8, 9, 30, 0, 123456, tzinfo=timezone.utc)
@@ -48,6 +49,24 @@ def test_collect_counts_and_orders_everything():
     assert r.artifacts == {"a.dcm": report.Artifact("a.dcm", 20, "aa"), "b.dcm": report.Artifact("b.dcm", 10, "bb")}
     assert (r.started, r.finished) == (T0, T0 + timedelta(seconds=2))  # finished is read after the scan
     assert not r.complete
+
+
+def test_whole_file_findings_come_first_then_by_offset():
+    found = [finding("x", Severity.LOW, "a", 1), finding("x", Severity.LOW, "a", 0), finding("x", Severity.LOW, "a")]
+    r = report.collect([FileResult("a", True, found)], ticking_clock())
+    assert [f.offset for f in r.findings] == [None, 0, 1]
+
+
+def test_no_command_is_a_usage_error():
+    with pytest.raises(SystemExit) as exc:
+        main([])
+    assert exc.value.code == 2
+
+
+def test_machine_readable_reports_are_pure_ascii():
+    name = "caf" + chr(0xE9) + "-" + chr(0x60A3) + ".dcm"  # valid Unicode, not ASCII
+    text = dumps({"path": name})
+    assert text.isascii() and "\\u00e9" in text and json.loads(text)["path"] == name
 
 
 def test_threshold_is_inclusive():

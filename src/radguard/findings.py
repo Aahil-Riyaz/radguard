@@ -15,7 +15,7 @@ class Severity(IntEnum):
     LOW = 1
     MEDIUM = 2
     HIGH = 3
-    CRITICAL = 4
+    CRITICAL = 4  # pragma: no mutate (equivalent: only the order of the values is ever used)
 
     def __str__(self) -> str:
         return self.name.lower()

@@ -363,8 +363,23 @@ def test_any_text_is_made_inert_without_losing_anything(title, detail):
 
 
 def test_messages_are_capped():
+    assert sarif.MAX_MESSAGE == 4096
     message = sarif.message_text("T", "x" * 10_000)
-    assert len(unescape(message)) == sarif.MAX_MESSAGE and message.endswith("...")
+    assert len(unescape(message)) == 4096 and message.endswith("...")
+
+
+def test_message_cap_boundary():
+    exactly = sarif.message_text("7" * 4096)
+    assert len(exactly) == 4096 and not exactly.endswith("...")
+    assert sarif.message_text("7" * 4097) == "7" * 4093 + "..."
+
+
+def test_sub_rules_are_ordered_by_rule_then_most_severe_first():
+    findings = [finding("values.embedded-file", Severity.LOW, offset=1),
+                finding("pixels.slack", Severity.MEDIUM, offset=2),
+                finding("values.embedded-file", Severity.HIGH, offset=3)]
+    ids = [d["id"] for d in the_run(to_sarif(scan_report(findings)))["tool"]["driver"]["rules"]]
+    assert ids[len(rules.RULES):] == ["pixels.slack/medium", "values.embedded-file/high", "values.embedded-file/low"]
 
 
 def test_first_sentence_is_the_title():
