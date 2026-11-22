@@ -109,7 +109,7 @@ radguard scan examples/
 radguard map examples/two-scans-one-file.dcm
 ```
 
-`radguard scan` takes files or directories, `--format json` for machine-readable output (versioned schema), and `--fail-on {info,low,medium,high,critical}` to choose the severity that counts as a failure.
+`radguard scan` takes files or directories, `--format json` for machine-readable output (versioned schema), `--format sarif` for [SARIF 2.1.0](#github-code-scanning), and `--fail-on {info,low,medium,high,critical}` to choose the severity that counts as a failure.
 
 | Exit status | Meaning |
 |---|---|
@@ -120,13 +120,28 @@ radguard map examples/two-scans-one-file.dcm
 
 RadGuard fails closed: anything it was asked to scan but could not examine is reported, never silently dropped. On machines whose application-control policy blocks unsigned launchers (such as Windows Smart App Control), `python -m radguard ...` runs the same commands.
 
+### GitHub code scanning
+
+`radguard scan --format sarif` writes SARIF 2.1.0, so findings appear in a repository's **Security** tab and in SIEMs that ingest SARIF. Each check is a rule; severities map to GitHub's `security-severity` scale (critical 9.5, high 8.0, medium 5.5, low 3.0, info 0.5). Paths are relative to the working directory so alerts attach to the file. DICOM is binary, so every region is anchored at line 1 and the true position travels in `byteOffset`. An incomplete scan (exit status 3) sets `executionSuccessful: false` in the run, so partial coverage is never mistaken for a clean result.
+
+```yaml
+# .github/workflows/dicom-scan.yml
+- run: radguard scan studies/ --format sarif --fail-on critical > radguard.sarif || test $? -eq 1
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: radguard.sarif
+```
+
+`|| test $? -eq 1` keeps the upload step running when findings fail the scan (status 1) but still stops on usage errors or an incomplete scan (2, 3).
+
 ## Roadmap
 
 - [x] **L1 structure:** preamble polyglots, byte-coverage parser, hidden payloads, pixel contract, parser differentials
 - [x] L1: value-level carving, encapsulated documents, codestream analysis, self-audit
 - [x] L1: private-data analysis, including decompression of compressed private values
 - [x] Engineering review: fail-closed scanning, bare datasets, strict typing, mutation testing
-- [ ] L1: SARIF output; parallel scanning
+- [x] L1: SARIF output for GitHub code scanning
+- [ ] L1: parallel scanning
 - [ ] **L2 privacy:** PHI in tags (PS3.15 Annex E) and burned-in pixel text (GPU OCR)
 - [ ] **L3 integrity:** CT tamper and deepfake detection, GPU-accelerated
 - [ ] **L4 provenance:** DICOM digital signatures
