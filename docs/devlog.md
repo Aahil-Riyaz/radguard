@@ -76,3 +76,15 @@ Next (Day 4): private-tag analysis (creator blocks, oversized and high-entropy p
 **Learned:** a metric is only as honest as the tool measuring it. The mutation tester produced a convincing 100% that was entirely fake, and the fix was to make the tool verify its own preconditions before reporting anything.
 
 Next (Day 5): SARIF output, so findings land in GitHub code scanning and SIEMs.
+
+## 2026-11-22 (Day 5)
+
+**SARIF output, so findings land in GitHub code scanning and SIEMs.** `radguard scan --format sarif` emits SARIF 2.1.0 (`src/radguard/sarif.py`).
+
+- One rule per check id, one result per finding. GitHub ranks alerts by the `security-severity` property rather than `level`, so both are set (critical 9.5, high 8.0, medium 5.5, low 3.0, info 0.5).
+- Binary files have no line numbers, but GitHub requires a region, so every result is anchored at line 1 and the real position is kept in `byteOffset`.
+- URIs are working-directory-relative POSIX paths (code scanning only attaches alerts to repo-relative files); paths outside the tree fall back to absolute `file:` URIs.
+- The fail-closed contract carries over: an incomplete scan marks the invocation `executionSuccessful: false` and lists each unreadable path as a tool notification, so a consumer cannot mistake partial coverage for a clean result. Exit statuses are unchanged.
+- File names are attacker-controlled; `json.dumps` escapes bidi overrides and control characters, and a test pins that.
+
+Next (Day 6): multiprocessing and a files/sec benchmark on 10k files.

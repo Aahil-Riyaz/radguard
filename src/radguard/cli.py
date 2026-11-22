@@ -19,6 +19,7 @@ from collections import Counter
 from radguard import __version__, mapview
 from radguard.findings import Finding, Severity
 from radguard.output import safe
+from radguard.sarif import build_sarif
 from radguard.scanner import open_dicom, scan_paths
 
 SEVERITY_NAMES = [str(s) for s in Severity]
@@ -37,7 +38,8 @@ def main(argv: list[str] | None = None) -> int:
 
     scan = sub.add_parser("scan", help="scan DICOM files and directories")
     scan.add_argument("paths", nargs="+", help="files or directories (searched recursively)")
-    scan.add_argument("--format", choices=("text", "json"), default="text")
+    scan.add_argument("--format", choices=("text", "json", "sarif"), default="text",
+                      help="sarif emits SARIF 2.1.0 for GitHub code scanning (default: text)")
     scan.add_argument(
         "--fail-on", choices=SEVERITY_NAMES, default="high",
         help="exit with status 1 if any finding is at least this severe (default: high)",
@@ -85,6 +87,9 @@ def _scan(args: argparse.Namespace) -> int:
             "notes": notes,
         }
         json.dump(report, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+    elif args.format == "sarif":
+        json.dump(build_sarif(findings, errors, notes), sys.stdout, indent=2)
         sys.stdout.write("\n")
     else:
         # Paths and details carry attacker-controlled text: everything printed goes through safe().
