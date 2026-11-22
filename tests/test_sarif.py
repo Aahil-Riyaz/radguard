@@ -123,9 +123,10 @@ def test_cli_missing_path_exits_3_and_marks_run_unsuccessful(tmp_path, capsys, m
 
 def test_hostile_file_name_cannot_inject_control_characters(tmp_path, write_file, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    write_file("\\u202egpj.dcm".encode().decode("unicode_escape"), build_pe_polyglot())  # bidi override
+    bidi_override = chr(0x202E)  # "Trojan Source" style; built at runtime so this file stays ASCII
+    write_file(bidi_override + "gpj.dcm", build_pe_polyglot())
     main(["scan", ".", "--format", "sarif"])
     out = capsys.readouterr().out
-    assert chr(0x202E) not in out  # json.dumps escapes it as ‮
-    assert "\\u202e" in out
+    assert bidi_override not in out  # json.dumps escapes it as \u202e
+    assert r"\u202e" in out  # the escaped, visible form
     json.loads(out)
