@@ -109,7 +109,7 @@ radguard scan examples/
 radguard map examples/two-scans-one-file.dcm
 ```
 
-`radguard scan` takes files or directories, `--format json` for machine-readable output (versioned schema), `--format sarif` for [SARIF 2.1.0](#github-code-scanning), and `--fail-on {info,low,medium,high,critical}` to choose the severity that counts as a failure.
+`radguard scan` takes files or directories, `--format json` for machine-readable output (versioned schema), `--format sarif` for [SARIF 2.1.0](#github-code-scanning), `--jobs N` to scan with N worker processes (`0` = one per CPU; 4.8x faster on 10,000 files with 8 workers, identical output, see [results](docs/results.md)), and `--fail-on {info,low,medium,high,critical}` to choose the severity that counts as a failure.
 
 | Exit status | Meaning |
 |---|---|
@@ -141,7 +141,7 @@ RadGuard fails closed: anything it was asked to scan but could not examine is re
 - [x] L1: private-data analysis, including decompression of compressed private values
 - [x] Engineering review: fail-closed scanning, bare datasets, strict typing, mutation testing
 - [x] L1: SARIF output for GitHub code scanning
-- [ ] L1: parallel scanning
+- [x] L1: parallel scanning (`--jobs`), benchmarked on 10,000 files
 - [ ] **L2 privacy:** PHI in tags (PS3.15 Annex E) and burned-in pixel text (GPU OCR)
 - [ ] **L3 integrity:** CT tamper and deepfake detection, GPU-accelerated
 - [ ] **L4 provenance:** DICOM digital signatures

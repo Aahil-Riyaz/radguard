@@ -10,7 +10,7 @@ Every day gets one real, commit-sized task. If a day runs short, the minimum is 
 - [x] D3: Self-audit (9 findings fixed, regression-tested); budgeted carving engine; value-level carving with element paths; encapsulated documents; JPEG/JPEG-LS/J2K/RLE codestream analysis
 - [x] D4: Engineering review (fail-closed exit status and directory errors, bare datasets, strict typing, mutation testing) and private-data analysis with budgeted decompression of compressed private values
 - [x] D5: SARIF 2.1.0 output so findings show up in GitHub code scanning and SIEMs
-- [ ] D6: Multiprocessing; benchmark files/sec on 10k files
+- [x] D6: Multiprocessing; benchmark files/sec on 10k files
 - [ ] D7: Blog post #1, "Your CT scan can be an .exe"
 
 ### Week 2
