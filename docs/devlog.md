@@ -88,3 +88,14 @@ Next (Day 5): SARIF output, so findings land in GitHub code scanning and SIEMs.
 - File names are attacker-controlled; `json.dumps` escapes bidi overrides and control characters, and a test pins that.
 
 Next (Day 6): multiprocessing and a files/sec benchmark on 10k files.
+
+## 2026-11-23 (Day 6)
+
+**Parallel scanning: `radguard scan --jobs N`, with output identical for every N.** Measured on 10,000 files: 704 files/s serial, 3,406 files/s with 8 workers (4.8x). Numbers and method: [results.md](results.md).
+
+- **Deterministic by construction.** The walk stays serial and hands out batches of 32 files; results are consumed in submission order, so the report never depends on worker count. A test compares serial and parallel results for several worker counts and batch sizes, and the benchmark aborts if any run differs.
+- **Fail-closed when a worker dies.** If a hostile file kills its worker (native-code crash, OOM kill), the pool cannot say which file did it. The batch is re-run one file at a time in fresh processes, so the culprit is named and the scan exits 3, not 0. The pool replaces itself, so the rest of the tree is still scanned.
+- **A bug waiting on Windows.** `python -m radguard` had no `if __name__ == "__main__"` guard. With spawn-based workers each one re-imports the main module, so every worker would have started another scan. The guard is added and the first test that spawns workers would have hung without it.
+- **My first benchmark was wrong.** It said 2 workers were 6.4x faster than serial, which is impossible for CPU-bound work. The serial baseline was being charged for the one-time cost of reading freshly written files (about 7x slower than a warm read). An untimed warm-up pass fixed it; the corrected speedup for 2 workers is 1.77x. A speedup above the worker count means the baseline is wrong.
+
+Next (Day 7): blog post, "Your CT scan can be an .exe".

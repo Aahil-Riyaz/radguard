@@ -41,6 +41,10 @@ def main(argv: list[str] | None = None) -> int:
     scan.add_argument("--format", choices=("text", "json", "sarif"), default="text",
                       help="sarif emits SARIF 2.1.0 for GitHub code scanning (default: text)")
     scan.add_argument(
+        "--jobs", "-j", type=int, default=1, metavar="N",
+        help="scan with N worker processes (0 = one per CPU, default: 1). The report is identical for any N",
+    )
+    scan.add_argument(
         "--fail-on", choices=SEVERITY_NAMES, default="high",
         help="exit with status 1 if any finding is at least this severe (default: high)",
     )
@@ -61,7 +65,7 @@ def _scan(args: argparse.Namespace) -> int:
     notes: list[dict[str, str]] = []
     files = dicom = skipped = 0
 
-    for result in scan_paths(args.paths):
+    for result in scan_paths(args.paths, jobs=args.jobs):
         if result.note:
             notes.append({"path": result.path, "note": result.note})
             continue
